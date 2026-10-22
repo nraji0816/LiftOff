@@ -1,0 +1,2341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Liftoff: name something in the category. Basic answers stay on the ground, niche answers launch your rocket to space. Daily Flight and Unlimited modes with a live leaderboard.">
+<meta property="og:title" content="Liftoff">
+<meta property="og:description" content="Basic answers stay on the ground. Niche answers go to space.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2c5 5 7 11 7 17h-14c0-6 2-12 7-17z' fill='%23FF7A3D'/%3E%3Crect x='11' y='19' width='10' height='6' fill='%23C9D0E6'/%3E%3Cpath d='M12 25h8l-4 6z' fill='%23FFD166'/%3E%3C/svg%3E">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Liftoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Press+Start+2P&display=swap">
+<style>
+/* Layout: the whole page is a live space scene on a fixed canvas. Game console (left), flight window with the rocket (center), leaderboard + stats (right) float over it as HUD glass. Single dark theme by design. */
+:root{
+  color-scheme:dark;
+  --void:#04050D; --panel:rgba(8,11,28,.76); --line:rgba(130,155,255,.24);
+  --ink:#E9ECFF; --muted:#8F98C6; --cyan:#5CE1FF; --thrust:#FF7A3D; --thrust-ink:#1A0800; --thrust-dk:#B8441A;
+  --gold:#FFD166; --bad:#FF4D6D;
+  --b1:#FF8A3D; --b2:#F5C842; --b3:#C9E04B; --b4:#7ED957; --b5:#2FBF5F; --b6:#3DFF8F; --miss:#FF4D4D;
+  --f-pixel:"Press Start 2P",ui-monospace,Menlo,Consolas,monospace;
+  --f-body:"Chakra Petch",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box}
+body{background:var(--void);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px);opacity:.35}
+#space{position:fixed;inset:0;width:100%;height:100%;display:block;z-index:0}
+.flash{position:fixed;inset:0;pointer-events:none;z-index:2;background:var(--bad);opacity:0}
+.flash.go{animation:flash .45s ease-out}
+.flash.gold{background:var(--gold)}
+@keyframes flash{0%{opacity:.28}100%{opacity:0}}
+/* focus mode: during a round, only the prompt floats above the rocket */
+body.focus header.hud,body.focus .console,body.focus .side,body.focus .altbox{display:none}
+body.focus .grid{grid-template-columns:minmax(0,1fr)}
+body.focus .flightwin{position:relative;top:auto;order:0;height:calc(100dvh - 56px);min-height:540px}
+.air{position:absolute;left:0;right:0;top:3%;margin:0 auto;width:min(720px,100%);padding:0 8px;display:none;flex-direction:column;align-items:center;gap:14px;text-align:center}
+body.focus .air{display:flex}
+.air-top{display:flex;gap:10px 16px;align-items:center;justify-content:center;flex-wrap:wrap;background:rgba(4,8,24,.6);border:1px solid var(--line);padding:8px 14px;border-radius:2px}
+.air-top .engines{margin:0}
+.air-prompt{font-family:var(--f-body);font-weight:700;font-size:clamp(30px,5.2vw,60px);line-height:1.02;margin:0;text-transform:uppercase;text-wrap:balance;color:#FFFFFF;
+  text-shadow:0 3px 0 rgba(6,12,40,.9),0 0 26px rgba(4,8,24,.6)}
+.air .timer{width:min(520px,100%)}
+.air form.answer{width:min(560px,100%)}
+.air form.answer input{background:rgba(4,8,24,.78)}
+.air .bounce{width:min(560px,100%);background:rgba(4,8,24,.82);text-align:left}
+.air-hint{margin:0;font-size:14px;color:#FFFFFF;text-shadow:0 1px 3px rgba(0,0,0,.8);background:rgba(4,8,24,.45);padding:4px 10px;border-radius:2px}
+.air-verdict{display:flex;flex-direction:column;align-items:center;gap:8px;background:rgba(4,8,24,.72);border:1px solid var(--line);padding:14px 22px;border-radius:2px;animation:pop .22s ease-out}
+.air-verdict.top{border-color:var(--gold);box-shadow:0 0 26px rgba(255,209,102,.3)}
+.air-verdict.bad{border-color:var(--bad)}
+.air-ans{font-weight:700;font-size:26px;overflow-wrap:anywhere}
+.air-pts{font-family:var(--f-pixel);font-size:28px;line-height:1}
+.air-note{margin:0;color:var(--muted);font-size:14px}
+.livesrow{display:flex;align-items:center;gap:8px;margin-top:4px}
+.livesrow .engines{margin:0}
+.lnum{font-family:var(--f-pixel);font-size:9px;color:var(--muted)}
+.timer.paused i{background:var(--gold);box-shadow:0 0 10px var(--gold)}
+.secs.paused{color:var(--gold)}
+.air-top .lives{display:inline-flex;align-items:center;gap:6px}
+.air-top .lives b{font-family:var(--f-pixel);font-size:9px;font-weight:400}
+.air-top .lives.last b{color:var(--bad)}
+.air-top .lives.last .engine.on{animation:pulse .8s ease-in-out infinite alternate}
+.air-top .alt{color:var(--ink)}
+@keyframes pulse{to{background:var(--bad);border-color:var(--bad);box-shadow:0 0 12px var(--bad)}}
+.air-bonus{font-family:var(--f-pixel);font-size:10px;color:var(--b4)}
+.air-life{font-family:var(--f-pixel);font-size:10px;color:#7CFC7C}
+.air-lost{font-family:var(--f-pixel);font-size:10px;color:var(--bad)}
+/* points scale */
+.scale{position:relative;padding-top:22px;width:100%}
+.scale.compact{padding-top:0;width:min(560px,100%)}
+.track{display:flex;height:22px;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.scale.compact .track{height:16px;opacity:.9}
+.seg{display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;letter-spacing:.06em;min-width:0;overflow:hidden;color:#0A0D20}
+.scale.compact .seg{font-size:8px}
+.seg span{white-space:nowrap;overflow:hidden}
+.seg.t1{background:var(--b1)}.seg.t2{background:var(--b2)}.seg.t3{background:var(--b3)}.seg.t4{background:var(--b4)}.seg.t5{background:var(--b5)}.seg.t6{background:var(--b6)}
+.marker{position:absolute;top:18px;bottom:-4px;width:3px;margin-left:-1.5px;background:#FFFFFF;box-shadow:0 0 10px #FFFFFF}
+.marker b{position:absolute;top:-19px;left:50%;transform:translateX(-50%);font-family:var(--f-pixel);font-size:9px;font-weight:400;background:#FFFFFF;color:#0A0D20;padding:3px 4px;border-radius:2px;white-space:nowrap}
+.ticks{position:relative;height:12px;margin-top:4px}
+.ticks span{position:absolute;transform:translateX(-50%);font-family:var(--f-pixel);font-size:7px;color:var(--muted)}
+.ticks span.first{transform:none}.ticks span.last{transform:translateX(-100%)}
+/* summaries */
+.summary{display:flex;flex-direction:column;gap:14px}
+.sum-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.sum-prompt{margin:0;font-weight:700;font-size:20px;text-transform:uppercase;text-wrap:balance}
+.sum-hero{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--line);background:rgba(0,0,0,.35);padding:14px 16px;border-radius:2px}
+.sum-hero.top{border-color:var(--gold);box-shadow:0 0 26px rgba(255,209,102,.2)}
+.sum-hero.bad{border-color:var(--bad)}
+.sum-ans{display:flex;flex-direction:column;gap:8px;align-items:flex-start;min-width:0}
+.big-pts{font-family:var(--f-pixel);font-size:clamp(34px,5vw,48px);line-height:1;text-align:right;font-variant-numeric:tabular-nums}
+.sum-score .label{text-align:right;margin-top:8px}
+.sum-miss{margin:0;color:var(--bad);font-weight:600}
+.sum-zone{margin:0;font-weight:600;color:var(--cyan)}
+.breakdown{display:grid;gap:8px;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);padding:10px 0}
+.brow{display:flex;justify-content:space-between;gap:10px;align-items:baseline;font-size:15px}
+.brow b{font-family:var(--f-pixel);font-size:10px;font-weight:400;white-space:nowrap}
+.brow.combo b{color:var(--b4)}
+.brow.total{color:var(--cyan);font-weight:700}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{border:1px solid var(--line);background:rgba(0,0,0,.3);padding:10px 12px;border-radius:2px;min-width:0}
+.tile .v{font-family:var(--f-pixel);font-size:15px;margin-top:8px;line-height:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .v .engines{margin:0}
+.tile .sub{font-size:12px;color:var(--muted);margin-top:6px}
+.tile.last{border-color:var(--bad)}.tile.last .sub{color:var(--bad)}
+@media (max-width:460px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.goals{display:grid;gap:10px}
+.goal{display:grid;gap:6px}
+.goal p{margin:0;font-size:13px;color:var(--muted)}
+.goal p b{color:var(--ink)}
+.goal .bar{height:8px;background:rgba(255,255,255,.08);border:1px solid var(--line)}
+.goal .bar i{display:block;height:100%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.goal.best .bar i{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.record{font-family:var(--f-pixel);font-size:11px;color:#0A0D20;background:var(--gold);padding:10px 12px;border-radius:2px;text-align:center;box-shadow:0 0 22px rgba(255,209,102,.45)}
+.btn.big{font-size:13px;padding:16px 22px;width:100%}
+.logbox{display:grid;gap:8px}
+.howto{margin:0;padding-left:22px;display:grid;gap:6px}
+.howto li::marker{font-family:var(--f-pixel);font-size:10px;color:var(--cyan)}
+/* badges */
+.badges-label{margin-top:16px;display:flex;justify-content:space-between}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.badge{font-family:var(--f-pixel);font-size:7px;line-height:1.2;padding:6px 7px;border:1px dashed var(--line);color:#535C86;border-radius:2px}
+.badge.on{border-style:solid;border-color:var(--b5);color:var(--b5);background:rgba(199,125,255,.12)}
+.newbadges .badges{margin-top:8px}
+/* pop-up banners */
+.banner{position:fixed;left:50%;top:max(16px,env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:6;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:12px 20px;background:rgba(4,8,24,.9);border:2px solid var(--cyan);border-radius:3px;text-align:center;pointer-events:none;max-width:calc(100vw - 32px)}
+.banner b{font-family:var(--f-pixel);font-size:14px;font-weight:400;color:var(--cyan)}
+.banner span{font-size:14px}
+.banner.combo{border-color:var(--b4)}.banner.combo b{color:var(--b4)}
+.banner.life{border-color:#7CFC7C}.banner.life b{color:#7CFC7C}
+.banner.record{border-color:var(--gold);box-shadow:0 0 30px rgba(255,209,102,.4)}.banner.record b{color:var(--gold)}
+.banner.badge{border-color:var(--b5)}.banner.badge b{color:var(--b5)}
+.banner.warn{border-color:var(--bad)}.banner.warn b{color:var(--bad)}
+.banner.go{animation:bn 1.9s ease both}
+.banner[hidden]{display:none}
+body.focus .banner{top:auto;bottom:max(24px,env(safe-area-inset-bottom,0px))}
+@keyframes bn{0%{opacity:0;transform:translate(-50%,-14px) scale(.9)}10%{opacity:1;transform:translate(-50%,0) scale(1.04)}16%{transform:translate(-50%,0) scale(1)}85%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.banner.go{animation:none}.air-top .lives.last .engine.on{animation:none}}
+/* ---- page shell ---- */
+.nav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px;padding:12px 16px}
+.nav .mark{background:none;border:0;padding:0;cursor:pointer;font-size:clamp(20px,2.6vw,28px)}
+.pages{display:flex;flex-wrap:wrap;gap:6px}
+.pages button{font-family:var(--f-pixel);font-size:9px;letter-spacing:.05em;padding:10px 12px;background:transparent;border:1px solid transparent;border-radius:2px;color:var(--muted)}
+.pages button:hover{color:var(--ink);border-color:var(--line)}
+.pages button[aria-current="page"]{color:#04121A;background:var(--cyan)}
+.pane{padding:22px;min-height:420px}
+.grid{grid-template-columns:minmax(0,1.2fr) minmax(220px,.72fr) minmax(0,.9fr)}
+body:not(.page-lobby):not(.page-results) .side{display:none !important}
+body.page-leaderboard .grid,body.page-stats .grid,body.page-how .grid{grid-template-columns:minmax(0,1fr) 260px}
+body.page-results .grid{grid-template-columns:minmax(0,1.2fr) minmax(220px,.72fr) minmax(0,.9fr)}
+body.focus .nav,body.focus .pane,body.focus .side{display:none !important}
+@media (max-width:1040px){
+  body.page-lobby .grid,body.page-results .grid{grid-template-columns:minmax(0,1fr) 210px}
+  body.page-leaderboard .grid,body.page-stats .grid,body.page-how .grid{grid-template-columns:minmax(0,1fr) 200px}
+}
+@media (max-width:680px){
+  body.page-lobby .grid,body.page-results .grid,body.page-leaderboard .grid,body.page-stats .grid,body.page-how .grid{grid-template-columns:minmax(0,1fr)}
+  body.page-leaderboard .flightwin,body.page-stats .flightwin,body.page-how .flightwin,body.page-results .flightwin{display:none}
+  body.page-lobby .flightwin{height:220px}
+  .pages button{padding:8px 9px;font-size:8px}
+}
+.page{display:flex;flex-direction:column;gap:14px}
+.page-title{font-family:var(--f-pixel);font-size:clamp(16px,2.4vw,22px);line-height:1.3;margin:0}
+.sub-title{font-family:var(--f-pixel);font-size:11px;margin:10px 0 0;color:var(--cyan)}
+.lobby{display:flex;flex-direction:column;gap:16px}
+.daily{display:flex;flex-direction:column;gap:12px;padding:18px;border:1px solid var(--gold);border-radius:3px;background:linear-gradient(160deg,rgba(255,209,102,.12),rgba(255,209,102,0) 60%)}
+.daily-title{font-family:var(--f-pixel);font-size:clamp(16px,2.4vw,24px);line-height:1.25;margin:0;color:var(--gold);text-shadow:0 0 18px rgba(255,209,102,.35)}
+.daily-done{display:flex;flex-direction:column;gap:8px}
+.over-score.small{font-size:clamp(26px,4vw,36px)}
+.streak{margin:0;font-size:14px}
+.streak b{font-family:var(--f-pixel);font-size:10px;font-weight:400;color:var(--thrust)}
+.mode-card{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;padding:16px 18px;border:1px solid var(--line);border-radius:3px;background:rgba(0,0,0,.25)}
+.mode-card h3{font-family:var(--f-pixel);font-size:12px;margin:8px 0 6px;line-height:1.3}
+.mode-card > div{flex:1 1 260px;min-width:0}
+.mode-card .vnote{margin:0}
+.packs-wrap{display:flex;flex-direction:column;gap:8px}
+.packs-wrap .vnote{margin:0}
+.packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.pack{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;padding:12px;border:1px solid var(--line);border-radius:2px;background:rgba(0,0,0,.3)}
+.pack b{font-family:var(--f-pixel);font-size:9px;font-weight:400;line-height:1.4;color:var(--cyan)}
+.pack span{font-size:13px;color:var(--muted)}
+.pack:hover{border-color:var(--cyan);background:rgba(92,225,255,.08)}
+.btn.wide{width:100%;margin-top:12px}
+.actions{display:flex;flex-wrap:wrap;gap:10px}
+.actions .btn.big{width:auto;flex:1 1 200px}
+.cells{display:inline-flex;flex-wrap:wrap;gap:4px;vertical-align:middle}
+.cell{display:inline-block;width:20px;height:20px;border-radius:3px;background:var(--line)}
+.cells.sm{gap:2px}.cells.sm .cell,.cell.sm{width:10px;height:10px;border-radius:2px}
+.cell.m{background:var(--miss)}
+.cell.t1{background:var(--b1)}.cell.t2{background:var(--b2)}.cell.t3{background:var(--b3)}.cell.t4{background:var(--b4)}.cell.t5{background:var(--b5)}
+.cell.t6{background:var(--b6);box-shadow:0 0 8px rgba(61,255,143,.7)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.lb .nm small .cells{margin-right:4px}
+.lobby-toast:empty{display:none}
+.lobby-toast{color:var(--gold)}
+.lb-scroll{max-height:min(70vh,900px);overflow:auto;padding-right:4px}
+.lb .nm small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sharebox{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:2px;padding:10px;font:inherit}
+.sharebox[hidden]{display:none}
+.tiles.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:760px){.tiles.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+.badge-card{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px dashed var(--line);border-radius:2px;color:#5D6690}
+.badge-card b{font-family:var(--f-pixel);font-size:8px;font-weight:400;line-height:1.4}
+.badge-card span{font-size:13px}
+.badge-card.on{border-style:solid;border-color:var(--b5);color:var(--ink);background:rgba(199,125,255,.1)}
+.badge-card.on b{color:var(--b5)}
+.modes-list{margin:0;padding-left:18px;display:grid;gap:6px}
+.sumpanel{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:min(600px,calc(100% - 16px));max-height:calc(100% - 24px);overflow:auto;padding:20px;z-index:2}
+.sumpanel[hidden]{display:none}
+.quit{font-family:var(--f-pixel);font-size:8px;letter-spacing:.04em;padding:6px 8px;background:transparent;border:1px solid var(--line);border-radius:2px;color:var(--muted)}
+.quit:hover{color:var(--bad);border-color:var(--bad)}
+.transit{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;justify-content:space-between;align-items:center;gap:16px;
+  padding:max(28px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(28px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));
+  background:var(--void);opacity:0;transition:opacity .25s}
+.transit.show{opacity:1}
+.transit[hidden]{display:none}
+.transit canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.tr-top,.tr-bot{position:relative;z-index:1;background:rgba(4,8,24,.66);border:1px solid var(--line);border-radius:3px;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.tr-top{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 26px;text-align:center}
+.tr-round{font-family:var(--f-pixel);font-size:clamp(24px,5vw,44px);line-height:1;text-shadow:0 0 18px rgba(92,225,255,.5)}
+.tr-next{font-weight:600;color:var(--cyan)}
+.tr-count{font-family:var(--f-pixel);font-size:clamp(40px,9vw,80px);line-height:1;color:var(--thrust);text-shadow:0 0 24px rgba(255,122,61,.6);min-height:1em}
+.tr-bot{display:flex;flex-wrap:wrap;gap:14px 28px;align-items:center;justify-content:center;padding:12px 18px}
+.tr-bot b{display:block;font-family:var(--f-pixel);font-size:12px;font-weight:400;margin-top:6px}
+.tr-bot .btn{padding:10px 14px;font-size:9px}
+.wrap{position:relative;z-index:1;max-width:1320px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* HUD glass with corner brackets */
+.glass{
+  background:
+    linear-gradient(var(--cyan),var(--cyan)) top left/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) top left/2px 14px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) top right/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) top right/2px 14px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) bottom left/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) bottom left/2px 14px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) bottom right/14px 2px no-repeat,
+    linear-gradient(var(--cyan),var(--cyan)) bottom right/2px 14px no-repeat,
+    var(--panel);
+  border:1px solid var(--line);border-radius:3px;
+  -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
+  box-shadow:0 12px 40px rgba(0,0,0,.45);min-width:0}
+.label{font-family:var(--f-pixel);font-size:9px;line-height:1.4;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+
+header.hud{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 24px;padding:14px 18px}
+.mark{font-family:var(--f-pixel);font-size:clamp(22px,3.4vw,34px);line-height:1;margin:0;letter-spacing:.02em;color:var(--ink);text-shadow:0 0 18px rgba(92,225,255,.35)}
+.mark span{color:var(--thrust);text-shadow:0 0 18px rgba(255,122,61,.5)}
+.tag{margin:8px 0 0;color:var(--muted);font-size:14px}
+.readouts{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:flex-end}
+.ro .num{font-family:var(--f-pixel);font-size:18px;line-height:1;margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ro .num small{font-size:9px;color:var(--muted);margin-left:4px}
+.engines{display:flex;gap:6px;margin-top:4px}
+.engine{width:12px;height:18px;border-radius:6px 6px 2px 2px;border:2px solid var(--muted);opacity:.5}
+.engine.on{background:var(--thrust);border-color:var(--thrust);opacity:1;box-shadow:0 0 10px rgba(255,122,61,.7)}
+.sound{font-family:var(--f-pixel);font-size:9px;letter-spacing:.06em;padding:10px 12px;background:transparent;border:1px solid var(--line);border-radius:2px;color:var(--muted)}
+.sound[aria-pressed="true"]{color:var(--cyan);border-color:var(--cyan)}
+
+.grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(220px,.8fr) minmax(0,.95fr);gap:16px;align-items:start}
+.flightwin{position:sticky;top:12px;height:clamp(460px,calc(100dvh - 150px),900px);min-width:0}
+.altbox{position:absolute;left:10px;top:10px;pointer-events:none;background:rgba(4,8,24,.62);border:1px solid var(--line);border-radius:2px;padding:8px 10px}
+.altbox b{display:block;font-family:var(--f-pixel);font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums;text-shadow:0 0 10px rgba(92,225,255,.5)}
+.altbox span{display:block;font-family:var(--f-pixel);font-size:9px;margin-top:6px;color:var(--cyan)}
+@media (max-width:1040px){
+  .grid{grid-template-columns:minmax(0,1fr) 210px}
+  .side{grid-column:1/-1;display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+}
+@media (max-width:680px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .flightwin{order:-1;position:relative;top:auto;height:260px}
+  .side{grid-template-columns:minmax(0,1fr)}
+  .readouts{gap:10px 18px}
+}
+
+/* console */
+.console{padding:20px;display:flex;flex-direction:column;gap:16px;min-height:460px}
+.eyebrow{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.cat{font-family:var(--f-pixel);font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--cyan)}
+.secs{font-family:var(--f-pixel);font-size:12px;font-variant-numeric:tabular-nums}
+.secs.low{color:var(--bad)}
+.prompt{font-family:var(--f-body);font-weight:700;font-size:clamp(26px,3.3vw,40px);line-height:1.05;margin:0;text-wrap:balance;text-transform:uppercase;letter-spacing:.01em}
+.timer{height:8px;background:rgba(255,255,255,.08);border:1px solid var(--line);overflow:hidden}
+.timer i{display:block;height:100%;background:var(--cyan);transform-origin:left;transition:transform .1s linear;box-shadow:0 0 10px var(--cyan)}
+.timer.low i{background:var(--bad);box-shadow:0 0 10px var(--bad)}
+form.answer{display:flex;gap:8px;flex-wrap:wrap}
+form.answer input{flex:1 1 200px;min-width:0;padding:14px 16px;font-size:18px;font-weight:600;border:1px solid var(--cyan);border-radius:2px;background:rgba(0,0,0,.45);caret-color:var(--thrust)}
+form.answer input::placeholder{color:#5D6690}
+.btn{font-family:var(--f-pixel);font-size:11px;letter-spacing:.04em;padding:14px 18px;border-radius:2px;border:0;background:var(--ink);color:#0A0D20;box-shadow:0 4px 0 #7C84AC;transition:transform .05s}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #7C84AC}
+.btn.primary{background:var(--thrust);color:var(--thrust-ink);box-shadow:0 4px 0 var(--thrust-dk),0 0 22px rgba(255,122,61,.35)}
+.btn.primary:active{box-shadow:0 1px 0 var(--thrust-dk)}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line);box-shadow:none}
+.btn:disabled{opacity:.5;cursor:default}
+.hint{font-size:13px;color:var(--muted);margin:0}
+
+.chip{font-family:var(--f-pixel);font-size:8px;line-height:1;letter-spacing:.04em;padding:6px 7px;border:1px solid currentColor;border-radius:2px;white-space:nowrap;display:inline-block}
+.chip.t1{color:var(--b1);background:rgba(255,159,67,.12)}
+.chip.t2{color:var(--b2);background:rgba(242,208,75,.12)}
+.chip.t3{color:var(--b3);background:rgba(168,224,90,.12)}
+.chip.t4{color:var(--b4);background:rgba(79,216,110,.12)}
+.chip.t5{color:var(--b5);background:rgba(47,191,95,.14)}
+.chip.t6{color:var(--b6);background:rgba(61,255,143,.14);box-shadow:0 0 12px rgba(61,255,143,.45)}
+.chip.bad{color:var(--bad);background:rgba(255,77,109,.12)}
+
+.verdict{border:1px solid var(--line);border-radius:2px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;background:rgba(0,0,0,.35);animation:pop .22s ease-out}
+.bounce{border:1px solid var(--gold);background:rgba(255,209,102,.07);border-radius:2px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;animation:pop .2s ease-out}
+.didyou{margin:0;font-size:17px;font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.didyou b{color:var(--gold)}
+.sug{font-family:var(--f-body);font-weight:600;font-size:15px;padding:7px 12px;border:1px solid var(--cyan);background:rgba(92,225,255,.1);border-radius:2px}
+.sug:hover{background:rgba(92,225,255,.22)}
+form.answer input.shake{animation:shake .35s}
+@keyframes shake{20%{transform:translateX(-6px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.verdict.top{border-color:var(--gold);box-shadow:inset 4px 0 0 var(--gold),0 0 24px rgba(255,209,102,.18)}
+.verdict.bad{border-color:var(--bad);box-shadow:inset 4px 0 0 var(--bad)}
+.vtop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.vans{font-weight:700;font-size:21px;overflow-wrap:anywhere}
+.vpts{font-family:var(--f-pixel);font-size:22px;line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
+.vkm{font-family:var(--f-pixel);font-size:8px;color:var(--muted);margin-top:6px}
+.vnote{margin:0;color:var(--muted);font-size:14px}
+.vnote b{color:var(--ink);font-weight:600}
+
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-top:1px dashed var(--line)}
+.log li{display:grid;grid-template-columns:30px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(130,155,255,.12);font-size:14px}
+.log .n{font-family:var(--f-pixel);color:var(--muted);font-size:8px}
+.log .q{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log .q small{color:var(--muted)}
+.log .p{font-family:var(--f-pixel);font-size:10px;font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
+@media (max-width:520px){.log li{grid-template-columns:26px minmax(0,1fr) auto}.log li .chip{display:none}}
+
+.intro{display:flex;flex-direction:column;gap:14px}
+.intro h2{font-family:var(--f-pixel);font-size:clamp(16px,2.2vw,22px);line-height:1.3;margin:0;text-wrap:balance}
+.rules{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.rules li{display:grid;grid-template-columns:68px minmax(0,1fr);gap:12px;align-items:center;font-size:14px}
+.rules li .chip{text-align:center}
+.rules b{font-weight:700}
+.mode{font-size:13px;color:var(--muted);margin:0}
+.mode b{color:var(--ink)}
+
+/* side */
+.side{display:flex;flex-direction:column;gap:16px;min-width:0}
+.board{padding:18px}
+.board h3{font-family:var(--f-pixel);font-size:13px;line-height:1.2;margin:0;letter-spacing:.02em}
+.bhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.tabs{display:flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.tabs button{border:0;background:transparent;padding:7px 9px;font-family:var(--f-pixel);font-size:8px;letter-spacing:.04em;color:var(--muted)}
+.tabs button[aria-pressed="true"]{background:var(--cyan);color:#04121A}
+.lb{list-style:none;margin:0;padding:0}
+.lb li{display:grid;grid-template-columns:28px 26px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(130,155,255,.12)}
+.lb li.me{background:rgba(92,225,255,.08);margin:0 -8px;padding-inline:8px}
+.lb .rk{font-family:var(--f-pixel);font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lb li:nth-child(1) .rk{color:var(--gold);text-shadow:0 0 8px rgba(255,209,102,.6)}
+.lb img{width:26px;height:26px;border-radius:50%;display:block}
+.lb .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.lb .nm small{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.lb .sc{font-family:var(--f-pixel);font-size:9px;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.empty{color:var(--muted);font-size:14px;margin:0;padding:6px 0}
+.mine{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 10px}
+.mine .v{font-family:var(--f-pixel);font-size:14px;line-height:1;margin-top:7px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.handle{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
+.handle input{flex:1 1 140px;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:2px;background:rgba(0,0,0,.4)}
+.handle .btn{padding:10px 12px;font-size:9px}
+.recent{margin:14px 0 0;padding:0;list-style:none;font-size:13px}
+.recent li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid rgba(130,155,255,.12);color:var(--muted)}
+.recent li b{color:var(--ink);font-family:var(--f-pixel);font-size:9px;font-weight:400;font-variant-numeric:tabular-nums}
+.toast{font-size:13px;margin:8px 0 0;color:var(--muted);min-height:1.5em}
+.over-score{font-family:var(--f-pixel);font-size:clamp(30px,5vw,48px);line-height:1;font-variant-numeric:tabular-nums;text-shadow:0 0 22px rgba(92,225,255,.45)}
+.over-score small{font-size:.35em;margin-left:8px;color:var(--muted)}
+.over-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.over-grid .v{font-family:var(--f-pixel);font-size:16px;margin-top:6px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--cyan);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px;margin-right:8px}
+@keyframes sp{to{transform:rotate(360deg)}}
+@keyframes pop{0%{transform:scale(.96);opacity:.4}100%{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.verdict,.bounce,form.answer input.shake{animation:none}.spin{animation-duration:2s}.timer i{transition:none}.flash.go{animation:none}}
+</style>
+</head>
+<body>
+<canvas id="space" aria-hidden="true"></canvas>
+<div class="flash" id="flash" aria-hidden="true"></div>
+<div class="banner" id="banner" role="status" hidden><b id="bnTitle"></b><span id="bnSub"></span></div>
+<div class="transit" id="transit" hidden>
+  <canvas id="tcanvas" aria-hidden="true"></canvas>
+  <div class="tr-top">
+    <div class="label">Get ready</div>
+    <div class="tr-round" id="trRound">ROUND 1</div>
+    <div class="tr-next" id="trNext"></div>
+    <div class="tr-count" id="trCount" aria-live="assertive"></div>
+  </div>
+  <div class="tr-bot">
+    <div><div class="label">Altitude</div><b id="trAlt">0 KM</b></div>
+    <div><div class="label">Lives</div><div class="engines" id="trEng"></div></div>
+    <button type="button" class="btn ghost" id="trSkip">SKIP</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="nav glass" id="nav">
+    <button type="button" class="mark" id="homeBtn" aria-label="Lobby">LIFT<span>OFF</span></button>
+    <nav class="pages" aria-label="Pages">
+      <button type="button" data-page="lobby">LOBBY</button>
+      <button type="button" data-page="leaderboard">LEADERBOARD</button>
+      <button type="button" data-page="stats">STATS</button>
+      <button type="button" data-page="how">HOW TO PLAY</button>
+    </nav>
+    <button type="button" class="sound" id="soundBtn" aria-pressed="true">SOUND ON</button>
+  </header>
+
+  <main class="grid" id="grid">
+    <section class="pane glass" id="pane" aria-live="polite"></section>
+
+    <div class="flightwin" id="flightwin" role="img" aria-label="Your rocket's altitude">
+      <div class="altbox"><div class="label">Altitude</div><b id="altKm">0 KM</b><span id="altZone">LAUNCH PAD</span></div>
+      <div class="air" id="air" aria-live="polite"></div>
+      <div class="sumpanel glass" id="sumPanel" hidden></div>
+    </div>
+
+    <aside class="side" id="side"></aside>
+</main>
+</div>
+
+<script>
+(() => {
+"use strict";
+// ---------- scoring ----------
+// Every answer scores 1 to 100. One point = 10 km of altitude.
+const KM = 10;
+const BANDS = [
+  {min:1,  name:"Basic",       blurb:"What everyone says first. Pepperoni."},
+  {min:16, name:"Common",      blurb:"Popular, not the first thought. Pineapple."},
+  {min:36, name:"Solid",       blurb:"A good pick. Jalapeño."},
+  {min:56, name:"Rare",        blurb:"Few people say it. Artichoke."},
+  {min:76, name:"Niche",       blurb:"Friends say “oh, nice.” Hot honey."},
+  {min:91, name:"Ultra niche", blurb:"Almost nobody says it. Nduja."}
+];
+const TIER_SHORT = ["BASIC","COMMON","SOLID","RARE","NICHE","ULTRA"];
+const BADGES = [
+  {id:"first",    name:"First Flight",   how:"Finish a flight"},
+  {id:"ultra",    name:"Ultra Niche",    how:"Score 91 or more on one answer"},
+  {id:"combo3",   name:"Combo x3",       how:"Score 56+ three answers in a row"},
+  {id:"flawless", name:"Flawless Five",  how:"Get 5 right answers in a row"},
+  {id:"mechanic", name:"Mechanic",       how:"Repair a life with an Ultra niche answer"},
+  {id:"orbit",    name:"Orbit",          how:"Reach 2,500 km in one flight"},
+  {id:"moon",     name:"Moonshot",       how:"Reach 5,000 km in one flight"},
+  {id:"deep",     name:"Deep Space",     how:"Reach 9,000 km in one flight"},
+  {id:"frequent", name:"Frequent Flyer", how:"Fly 10 flights"},
+  {id:"rare1",    name:"Rare Find",      how:"Score 56 or more on one answer"},
+  {id:"niche1",   name:"Niche Pick",     how:"Score 76 or more on one answer"},
+  {id:"perfect",  name:"Perfect 100",    how:"Score exactly 100 on one answer"},
+  {id:"hattrick", name:"Hat Trick",      how:"Get 3 Ultra niche answers in one flight"},
+  {id:"combo5",   name:"Combo x5",       how:"Score 56+ five answers in a row"},
+  {id:"flawless10", name:"Flawless Ten", how:"Get 10 right answers in a row"},
+  {id:"quick",    name:"Quick Draw",     how:"Score with 20 or more seconds left"},
+  {id:"clutch",   name:"Clutch",         how:"Score with 2 seconds or less left"},
+  {id:"proof",    name:"Proofreader",    how:"Fix a spelling slip and still score"},
+  {id:"comeback", name:"Comeback",       how:"Score 76+ while on your last life"},
+  {id:"marathon", name:"Marathon",       how:"Play 20 rounds in one Unlimited flight"},
+  {id:"clouds",   name:"Cloud Hopper",   how:"Reach 250 km in one flight"},
+  {id:"strato",   name:"Stratosphere",   how:"Reach 1,000 km in one flight"},
+  {id:"interstellar", name:"Interstellar", how:"Reach 15,000 km in one flight"},
+  {id:"voyager",  name:"Voyager",        how:"Reach 25,000 km in one flight"},
+  {id:"clean",    name:"Clean Sweep",    how:"Finish a Daily Flight with no misses"},
+  {id:"dailyace", name:"Daily Ace",      how:"Fly 4,000 km in one Daily Flight"},
+  {id:"topday",   name:"Top of the Day", how:"Finish a Daily Flight in first place"},
+  {id:"regular",  name:"Regular",        how:"Keep a 3 day Daily streak"},
+  {id:"weekly",   name:"Week Streak",    how:"Keep a 7 day Daily streak"},
+  {id:"veteran",  name:"Veteran",        how:"Fly 25 flights"},
+  {id:"acepilot", name:"Ace Pilot",      how:"Fly 50 flights"},
+  {id:"mileage",  name:"Mileage Club",   how:"Fly 50,000 km all time"}
+];
+const RANGES = ["1–15","16–35","36–55","56–75","76–90","91–100"];
+const BAND_COL = ["#FF8A3D","#F5C842","#C9E04B","#7ED957","#2FBF5F","#3DFF8F"];
+const bandOf = s => { let i = 0; BANDS.forEach((b,k) => { if (s >= b.min) i = k; }); return i + 1; };
+const ZONES = [{a:0,name:"Launch pad"},{a:25,name:"Clouds"},{a:100,name:"Stratosphere"},{a:250,name:"Orbit"},{a:500,name:"The Moon"},{a:900,name:"Deep space"}];
+const zoneIdx = a => { let z = 0; ZONES.forEach((q,i) => { if (a >= q.a) z = i; }); return z; };
+const BOOK_RANGE = [[4,15],[18,40],[45,72],[78,98]];
+const bookScore = (t,i,n) => { const [lo,hi] = BOOK_RANGE[t]; return Math.round(lo + (hi-lo) * (n>1 ? i/(n-1) : .5)); };
+const LIVES = 3, SECS = 25;
+// A wide pool of everyday categories plus pop culture and trends; a batch takes two or three pop culture ones.
+const THEMES = [
+  {label:"Food", hint:"dishes, snacks, comfort food, cuisines"},
+  {label:"Fast food", hint:"chains, menu items, sauces, combo meals"},
+  {label:"Drinks", hint:"sodas, juices, coffee orders, teas"},
+  {label:"Desserts", hint:"candy, cakes, ice cream flavors, cookies"},
+  {label:"Cooking", hint:"kitchen tools, spices, cooking methods, recipes"},
+  {label:"Grocery store", hint:"aisles, brands, produce, things on a list"},
+  {label:"Breakfast", hint:"breakfast foods, cereals, brunch, coffee shop items"},
+  {label:"Sports", hint:"sports, teams, gear, positions, things at a game"},
+  {label:"Fitness", hint:"gym equipment, exercises, workouts, races"},
+  {label:"Outdoors", hint:"camping, hiking, parks, the beach, fishing"},
+  {label:"Weather & nature", hint:"weather, plants, trees, flowers, landscapes"},
+  {label:"Animals", hint:"pets, farm animals, zoo animals, sea creatures, bugs"},
+  {label:"Movies", hint:"films, genres, famous characters, movie snacks"},
+  {label:"TV", hint:"shows, sitcoms, game shows, cartoons, reality TV"},
+  {label:"Music", hint:"instruments, genres, famous bands, song types"},
+  {label:"Celebrities", hint:"famous people known by one name, famous duos, icons"},
+  {label:"Around the house", hint:"household items, rooms, furniture, chores"},
+  {label:"Garage & tools", hint:"tools, hardware, car care, DIY projects"},
+  {label:"Bathroom", hint:"toiletries, bathroom items, grooming products"},
+  {label:"Brands", hint:"logos, products, famous companies"},
+  {label:"Stores", hint:"retail chains, malls, department stores, shopping"},
+  {label:"Places", hint:"cities, states, countries, landmarks"},
+  {label:"Travel", hint:"airports, packing, vacation spots, hotels, road trips"},
+  {label:"Cars", hint:"car brands, models, car parts, things in a car"},
+  {label:"Jobs", hint:"careers, workplaces, uniforms, tools of a trade"},
+  {label:"Office", hint:"office supplies, meetings, workplace things"},
+  {label:"Money", hint:"ways to pay, things people save for, banks, bills"},
+  {label:"Clothes", hint:"clothing, shoes, accessories, materials"},
+  {label:"Beauty", hint:"makeup, hair products, salon services, nails"},
+  {label:"Health", hint:"first aid kit items, doctor visit things, vitamins"},
+  {label:"Games", hint:"board games, card games, video games, arcade games"},
+  {label:"Toys", hint:"classic toys, playground equipment, kids' games"},
+  {label:"Hobbies", hint:"crafts, collecting, gardening, things people do for fun"},
+  {label:"Holidays", hint:"holidays, decorations, traditions, holiday foods"},
+  {label:"Parties", hint:"birthday party things, wedding things, party foods"},
+  {label:"Tech", hint:"gadgets, websites, computer parts, phone features"},
+  {label:"Science", hint:"everyday science like planets, weather terms, body parts, lab gear"},
+  {label:"History", hint:"famous inventions, presidents, historic events everyone knows"},
+  {label:"School", hint:"school supplies, subjects, things in a classroom"},
+  {label:"City life", hint:"things on a street, public transit, buildings, city sounds"},
+  {label:"Family", hint:"family traditions, relatives, things at grandma's house"},
+  {label:"Colors & shapes", hint:"shades of colors, shapes, patterns"},
+  {label:"Words", hint:"compound words, words that rhyme, things that start with a letter"},
+  {label:"Pop culture", hint:"viral moments, famous celebrity couples, award shows, iconic outfits", pop:true},
+  {label:"Trends", hint:"viral trends, dance crazes, fads, things that blew up online", pop:true},
+  {label:"Memes", hint:"famous memes, internet phrases, viral videos", pop:true},
+  {label:"Pop stars", hint:"pop singers, hit songs, tours, fan bases", pop:true},
+  {label:"Hip-hop", hint:"rappers, rap songs, producers, hip-hop slang", pop:true},
+  {label:"Sneakers & streetwear", hint:"sneaker models, streetwear brands, hype drops", pop:true},
+  {label:"Fashion", hint:"designer brands, luxury labels, runway, accessories", pop:true},
+  {label:"Video games", hint:"popular games, game characters, consoles, franchises", pop:true},
+  {label:"Superheroes", hint:"Marvel and DC heroes, villains, superhero movies", pop:true},
+  {label:"Anime & animation", hint:"anime series, animated movies, cartoon characters", pop:true},
+  {label:"Reality TV", hint:"reality shows, dating shows, competition shows, hosts", pop:true},
+  {label:"Streaming hits", hint:"binge-worthy series, streaming services, hit originals", pop:true},
+  {label:"Movie franchises", hint:"blockbuster series, sequels, iconic movie villains", pop:true},
+  {label:"Sports stars", hint:"famous athletes, sports legends, jersey numbers, celebrations", pop:true},
+  {label:"Supercars", hint:"exotic cars, luxury car brands, famous movie cars", pop:true},
+  {label:"Gadgets", hint:"hot tech products, apps everyone uses, smart devices", pop:true},
+  {label:"Creators", hint:"YouTubers, streamers, podcasts, influencer formats", pop:true}
+];
+// Pick n distinct categories: mostly everyday ones, with two or three from pop culture and trends.
+function pickThemes(n){
+  const pop = shuffle(THEMES.filter(t => t.pop)), gen = shuffle(THEMES.filter(t => !t.pop));
+  const k = Math.min(pop.length, n >= 7 ? 2 + (Math.random() < .5 ? 1 : 0) : 2);
+  return shuffle([...pop.slice(0, k), ...gen.slice(0, n - k)]);
+}
+const PACKS = [
+  {id:"food", name:"Food & Drink", hint:"foods, snacks, drinks, restaurants, desserts", blurb:"Snacks, menus, sips", book:["Food"]},
+  {id:"sports", name:"Sports", hint:"sports, teams, gear, stadium food, positions", blurb:"Games, gear, teams", book:["Sports"]},
+  {id:"screen", name:"Movies & TV", hint:"movies, shows, characters, actors' roles, streaming", blurb:"Shows, films, characters", book:null},
+  {id:"music", name:"Music", hint:"songs, artists, bands, instruments, genres", blurb:"Artists, songs, sounds", book:["Music"]},
+  {id:"animals", name:"Animals", hint:"pets, dog breeds, zoo animals, sea creatures, bugs", blurb:"Pets to sea life", book:["Pets"]},
+  {id:"places", name:"Places", hint:"cities, states, countries, landmarks, vacation spots", blurb:"Cities, trips, landmarks", book:["Places","Summer"]},
+  {id:"brands", name:"Brands", hint:"brands, stores, chains, logos, products", blurb:"Logos, stores, chains", book:["Cars","Food"]},
+  {id:"home", name:"Around the House", hint:"household items, rooms, chores, the kitchen, the garage", blurb:"Rooms, chores, junk drawers", book:["Home"]}
+];
+
+// Offline book: used only when the AI judge isn't available. Four tiers, common to rare.
+const BOOK = [
+ ["Name a fruit","Food",[["apple","banana","orange","strawberry","grape"],["mango","pineapple","watermelon","peach","pear","cherry","blueberry","lemon","kiwi"],["papaya","guava","lychee","pomegranate","fig","apricot","plum","nectarine","raspberry","blackberry","cantaloupe","coconut","lime","grapefruit","passion fruit","dragon fruit","persimmon","tangerine","honeydew","cranberry"],["durian","rambutan","mangosteen","jabuticaba","salak","cherimoya","soursop","feijoa","loquat","quince","kumquat","medlar","pawpaw","jackfruit","longan","starfruit","gooseberry","elderberry","tamarind","ackee","yuzu","physalis"]]],
+ ["Name a car brand","Cars",[["toyota","honda","ford","chevrolet","bmw"],["tesla","mercedes","nissan","jeep","audi","hyundai","kia","dodge"],["subaru","volkswagen","lexus","mazda","porsche","ferrari","lamborghini","cadillac","gmc","ram","volvo"],["rivian","lucid","maserati","bugatti","mclaren","pagani","koenigsegg","alfa romeo","lotus","genesis","polestar","saab","pontiac","saturn","rolls royce","bentley","aston martin","mini","fiat","infiniti","acura","lincoln","buick","chrysler"]]],
+ ["Name a pizza topping","Food",[["pepperoni","cheese","sausage","mushroom"],["onion","green pepper","bell pepper","black olive","olive","pineapple","bacon","ham"],["jalapeno","spinach","chicken","anchovy","garlic","tomato","basil","meatball","banana pepper","bbq chicken","extra cheese"],["prosciutto","arugula","artichoke","goat cheese","hot honey","truffle","potato","egg","clam","fig","nduja","soppressata","capers","corn","kimchi","eggplant","ricotta","burrata","pickles"]]],
+ ["Name a fast food chain","Food",[["mcdonalds","burger king","wendys","taco bell","kfc"],["subway","chick fil a","popeyes","in n out","five guys","dominos","pizza hut","chipotle"],["jack in the box","carls jr","sonic","arbys","whataburger","panda express","del taco","raising canes","dairy queen","white castle","shake shack","little caesars"],["culvers","bojangles","el pollo loco","krystal","checkers","rallys","wingstop","jollibee","portillos","zaxbys","cook out","steak n shake","a&w","hardees","churchs chicken","wienerschnitzel","the habit","freddys","jersey mikes","jimmy johns"]]],
+ ["Name something you bring to the beach","Summer",[["towel","sunscreen","umbrella","swimsuit"],["sunglasses","chair","beach chair","cooler","hat","sandals","flip flops","water","snacks"],["bucket","shovel","frisbee","book","speaker","volleyball","boogie board","surfboard","sand toys","sandwiches","football"],["kite","aloe","tent","wagon","metal detector","snorkel","wetsuit","hammock","bocce","spikeball","baby powder","fitted sheet","skimboard","kayak","paddleboard","sand anchor","dry bag"]]],
+ ["Name a breakfast food","Food",[["eggs","pancakes","bacon","cereal"],["waffles","toast","oatmeal","french toast","sausage","bagel"],["hash browns","muffin","yogurt","breakfast burrito","croissant","omelet","smoothie","grits","biscuits","fruit"],["shakshuka","chilaquiles","congee","huevos rancheros","eggs benedict","dutch baby","crepes","scrapple","menemen","migas","granola","avocado toast","chicken and waffles","biscuits and gravy","kolache","breakfast tacos","lox"]]],
+ ["Name a breed of dog","Pets",[["labrador retriever","golden retriever","poodle","german shepherd","bulldog"],["beagle","chihuahua","husky","pug","dachshund","rottweiler","boxer"],["corgi","shih tzu","dalmatian","great dane","doberman","pomeranian","border collie","yorkshire terrier","greyhound","pit bull","maltese","cocker spaniel","bernese mountain dog"],["basenji","vizsla","xoloitzcuintli","komondor","puli","leonberger","saluki","borzoi","whippet","schipperke","otterhound","shiba inu","akita","bergamasco","lagotto romagnolo","weimaraner","newfoundland","affenpinscher","bloodhound"]]],
+ ["Name a cheese","Food",[["cheddar","mozzarella","swiss","parmesan"],["brie","american","gouda","feta","provolone"],["camembert","blue cheese","ricotta","gruyere","monterey jack","colby","pepper jack","goat cheese","cottage cheese","cream cheese"],["epoisses","taleggio","raclette","halloumi","manchego","pecorino","roquefort","stilton","limburger","comte","emmental","fontina","havarti","paneer","queso fresco","gorgonzola","burrata","wensleydale","jarlsberg"]]],
+ ["Name something you find in a kitchen","Home",[["fridge","refrigerator","stove","oven","sink"],["microwave","toaster","spoon","fork","knife","plate"],["blender","kettle","spatula","cutting board","dishwasher","pan","pot","whisk","cup","bowl","can opener"],["mandoline","colander","ladle","zester","tongs","rolling pin","trivet","sieve","mortar and pestle","garlic press","salad spinner","dutch oven","ramekin","bench scraper","baster","pastry brush"]]],
+ ["Name a sport played with a ball","Sports",[["soccer","football","basketball","baseball","tennis"],["golf","volleyball","rugby","cricket"],["softball","handball","lacrosse","water polo","squash","bowling","pool","table tennis","ping pong","dodgeball","kickball","field hockey","billiards"],["hurling","sepak takraw","jai alai","pelota","bocce","petanque","croquet","polo","racquetball","pickleball","netball","korfball","gaelic football","wallyball","snooker","australian rules football","roundnet"]]],
+ ["Name a board game","Games",[["monopoly","chess","scrabble","checkers"],["clue","sorry","uno","candy land","connect four","jenga","battleship"],["catan","settlers of catan","risk","trivial pursuit","pictionary","yahtzee","operation","mouse trap","guess who","chutes and ladders","the game of life","boggle","stratego","backgammon","mahjong"],["ticket to ride","pandemic","carcassonne","codenames","azul","wingspan","dominion","splendor","othello","go","cribbage","mancala","diplomacy","gloomhaven","scattergories","balderdash","taboo","apples to apples"]]],
+ ["Name an app on your phone","Tech",[["instagram","tiktok","youtube","facebook","snapchat"],["spotify","netflix","uber","whatsapp","amazon","google maps","twitter","x"],["venmo","doordash","pinterest","reddit","linkedin","zoom","discord","duolingo","shazam","lyft","airbnb","cash app","waze"],["strava","notion","bereal","letterboxd","goodreads","citymapper","calm","headspace","signal","telegram","hinge","bumble","robinhood","nextdoor","audible","duolingo","alltrails","grubhub"]]],
+ ["Name something you wear in winter","Clothes",[["coat","jacket","gloves","hat","scarf"],["boots","beanie","sweater","mittens","hoodie"],["earmuffs","thermals","long johns","parka","puffer jacket","wool socks","fleece","snow pants","turtleneck","cardigan"],["balaclava","neck gaiter","ushanka","trapper hat","peacoat","duffle coat","snood","leg warmers","shearling","base layer","hand warmers","galoshes","anorak","poncho"]]],
+ ["Name a musical instrument","Music",[["piano","guitar","drums","violin"],["trumpet","flute","saxophone","bass","clarinet","cello"],["harp","ukulele","trombone","banjo","harmonica","accordion","tuba","viola","xylophone","oboe","french horn","keyboard","organ"],["bassoon","theremin","sitar","didgeridoo","bagpipes","mandolin","harpsichord","marimba","glockenspiel","oud","kalimba","bouzouki","erhu","koto","tabla","hurdy gurdy","celesta","ocarina","dulcimer","euphonium","shamisen","balalaika"]]],
+ ["Name a sneaker brand or model","Style",[["nike","adidas","jordan","air jordan","converse","vans"],["new balance","puma","reebok","air force 1","yeezy","skechers"],["asics","under armour","fila","dunks","air max","chuck taylor","crocs","hoka","on cloud","timberland","stan smith","ultraboost"],["salomon","veja","saucony","onitsuka tiger","mizuno","diadora","le coq sportif","k swiss","common projects","golden goose","balenciaga triple s","birkenstock","autry","brooks","clarks"]]],
+ ["Name a pasta shape","Food",[["spaghetti","penne","macaroni","lasagna","fettuccine"],["rigatoni","linguine","bow tie","farfalle","ravioli","rotini","tortellini"],["ziti","shells","orzo","angel hair","fusilli","gnocchi","manicotti","cavatappi","pappardelle"],["orecchiette","bucatini","radiatori","campanelle","trofie","conchiglie","gemelli","ditalini","paccheri","casarecce","strozzapreti","cappelletti","mafaldine","tagliatelle"]]],
+ ["Name a US state","Places",[["california","texas","florida","new york"],["ohio","washington","arizona","nevada","illinois","georgia","hawaii","alaska"],["michigan","colorado","oregon","utah","massachusetts","virginia","pennsylvania","new jersey","north carolina","tennessee","louisiana"],["vermont","wyoming","north dakota","south dakota","delaware","rhode island","idaho","montana","nebraska","kansas","new hampshire","west virginia","maine","arkansas","iowa","oklahoma","new mexico","mississippi","alabama","kentucky","missouri","minnesota","wisconsin","indiana","maryland","connecticut","south carolina"]]]
+];
+const ALIAS = {"grey":"gray","courgette":"zucchini","aubergine":"eggplant","beetroot":"beet","rocket":"arugula"};
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+function el(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    if (k === "class") n.className = attrs[k];
+    else if (k === "text") n.textContent = attrs[k];
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), attrs[k]);
+    else n.setAttribute(k, attrs[k]);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+}
+const norm = s => {
+  let t = String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/['’]/g,"").replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim();
+  t = t.replace(/^(a|an|the) /,"");
+  return ALIAS[t] || t;
+};
+const stem = s => s.replace(/(ies)$/,"y").replace(/(es|s)$/,"");
+const shuffle = a => { for (let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+const km = pts => ((pts||0) * KM).toLocaleString();
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const ls = {
+  get(k,d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const reduceMotion = (() => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch(e){ return false; } })();
+const PERMANENT = ["not_granted","sampling_disabled","not_declared","capability_disabled","capability_removed"];
+
+// ---------- retro sound (synthesized, no files) ----------
+const SFX = (() => {
+  // Chiptune synth: detuned square leads, sub bass, crackling noise for thrust, a compressor and a small room reverb.
+  let ctx = null, master = null, verb = null, noiseBuf = null;
+  let on = ls.get("lo-sound", true) !== false;
+  function ensure(){
+    if (!on) return null;
+    try {
+      if (!ctx){
+        const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
+        ctx = new AC();
+        const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 4; comp.connect(ctx.destination);
+        master = ctx.createGain(); master.gain.value = .4; master.connect(comp);
+        verb = ctx.createConvolver();
+        const len = Math.floor(ctx.sampleRate*1.6), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (let ch=0;ch<2;ch++){ const d = ir.getChannelData(ch); for (let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3); }
+        verb.buffer = ir;
+        const vg = ctx.createGain(); vg.gain.value = .25; verb.connect(vg); vg.connect(master);
+      }
+      if (ctx.state === "suspended") ctx.resume();
+    } catch(e){ return null; }
+    return ctx;
+  }
+  function out(node, wet){ node.connect(master); if (wet){ const s = ctx.createGain(); s.gain.value = wet; node.connect(s); s.connect(verb); } }
+  function tone(f, d, o){
+    o = o || {}; const c = ensure(); if (!c) return;
+    const s = c.currentTime + (o.t || 0), v = o.v || .12, a = o.a || .008;
+    const g = c.createGain();
+    g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(v, s + a);
+    g.gain.setTargetAtTime(.0001, s + Math.max(a, d*.6), d*.25 + .02);
+    let node = g;
+    if (o.lp){ const fl = c.createBiquadFilter(); fl.type = "lowpass"; fl.frequency.value = o.lp; g.connect(fl); node = fl; }
+    out(node, o.wet);
+    (o.det ? [-o.det, o.det] : [0]).forEach(dt => {
+      const osc = c.createOscillator(); osc.type = o.type || "square"; osc.frequency.setValueAtTime(f, s); osc.detune.value = dt;
+      if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, s + d);
+      if (o.vib){ const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = o.vib; lg.gain.value = f*.03; l.connect(lg); lg.connect(osc.frequency); l.start(s); l.stop(s + d + .4); }
+      osc.connect(g); osc.start(s); osc.stop(s + d + .4);
+    });
+  }
+  function noise(d, o){
+    o = o || {}; const c = ensure(); if (!c) return;
+    if (!noiseBuf){ noiseBuf = c.createBuffer(1, c.sampleRate*2, c.sampleRate); const ch = noiseBuf.getChannelData(0); for (let i=0;i<ch.length;i++) ch[i] = Math.random()*2-1; }
+    const s = c.currentTime + (o.t || 0), src = c.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const fl = c.createBiquadFilter(); fl.type = o.type || "lowpass"; fl.Q.value = o.q || .7;
+    fl.frequency.setValueAtTime(o.f1 || 800, s); if (o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, s + d);
+    const g = c.createGain(), v = o.v || .15;
+    g.gain.setValueAtTime(.0001, s); g.gain.exponentialRampToValueAtTime(v, s + (o.a || .04));
+    if (o.crackle) for (let i=.06;i<d*.8;i+=.045) g.gain.setValueAtTime(v*(.55 + Math.random()*.6), s + i);
+    g.gain.setValueAtTime(v*.9, s + Math.max(.07, d*.75)); g.gain.exponentialRampToValueAtTime(.0001, s + d);
+    src.connect(fl); fl.connect(g); out(g, o.wet); src.start(s); src.stop(s + d + .05);
+  }
+  const N = m => 440*Math.pow(2, (m - 69)/12);
+  return {
+    get on(){ return on; },
+    set(v){ on = v; ls.set("lo-sound", v); if (v) ensure(); },
+    unlock(){ ensure(); },
+    click(){ tone(N(84), .05, {type:"triangle", v:.07}); },
+    tick(last){ tone(last ? N(91) : N(84), .1, {type:"sine", v:.16, to:last ? N(86) : N(79), wet:.2}); tone(last ? N(79) : N(72), .05, {v:.04}); },
+    lock(){ tone(N(76), .06, {v:.08, det:6}); tone(N(83), .1, {v:.08, det:6, t:.06, wet:.15}); },
+    deny(){ tone(N(50), .12, {type:"sawtooth", v:.1, lp:900}); tone(N(45), .22, {type:"sawtooth", v:.1, lp:900, t:.12}); },
+    launch(){
+      noise(2.6, {v:.32, f1:110, f2:1500, a:.35, crackle:true, wet:.3});
+      noise(1.6, {v:.1, type:"bandpass", f1:300, f2:2600, q:1.2, t:.35});
+      tone(N(31), 2.3, {type:"sawtooth", v:.12, to:N(43), det:12, lp:500});
+      tone(N(43), 1.7, {v:.05, to:N(67), det:8, t:.4, lp:1800, wet:.25});
+      tone(N(24), 2.1, {type:"sine", v:.22});
+    },
+    score(band, score, dur){
+      const base = [60,62,64,67,69,72][band-1], seq = [0,4,7,12,16,19,24].slice(0, 2 + band);
+      seq.forEach((iv,i) => { tone(N(base+iv), .11, {v:.09, det:7, t:i*.07, wet:.2}); tone(N(base+iv+12), .08, {type:"triangle", v:.05, t:i*.07 + .02}); });
+      const endT = seq.length*.07;
+      tone(N(base + seq[seq.length-1] + (band >= 4 ? 12 : 0)), .5 + band*.1, {v:.08, det:9, vib:6, t:endT, wet:.4});
+      noise(dur, {v:.06 + .22*score/100, f1:170, f2:500 + score*30, a:.18, crackle:true, wet:.2});
+      tone(N(28), dur, {type:"sine", v:.08 + .14*score/100});
+      noise(.7, {type:"bandpass", f1:3200, f2:380, q:2, v:.07 + .09*score/100, t:Math.max(.15, dur - .7)});
+      if (band === 6) [0,7,12,16,19,24].forEach((iv,i) => tone(N(84+iv), .09, {type:"triangle", v:.06, t:endT + .15 + i*.06, wet:.45}));
+    },
+    combo(n){ for (let i=0;i<Math.min(n+1,5);i++) tone(N(79 + i*2), .07, {v:.07, det:5, t:.55 + i*.055}); },
+    miss(){ [55,54,53].forEach((m,i) => tone(N(m), .2, {type:"sawtooth", v:.12, lp:1400, t:i*.22})); tone(N(50), .75, {type:"sawtooth", v:.12, lp:1200, t:.66, vib:7, wet:.25}); noise(.5, {v:.16, f1:1800, f2:150}); },
+    timeout(){ tone(N(45), .3, {v:.11}); tone(N(44), .55, {v:.11, t:.32, vib:5, wet:.2}); noise(.35, {v:.08, f1:600, f2:200, t:.32}); },
+    zone(){ [0,4,7,12].forEach((iv,i) => tone(N(84+iv), .7, {type:"sine", v:.08, t:i*.08, wet:.5})); tone(N(72), .5, {type:"triangle", v:.05, wet:.4}); },
+    over(){ [67,64,60,55,52,48].forEach((m,i) => tone(N(m), .3, {v:.1, det:6, t:i*.2, wet:.3})); tone(N(36), 1.3, {type:"triangle", v:.1, t:1.2, wet:.45}); },
+    best(){ const t0 = 1.0; [[72,76],[76,79],[79,84],[84,88]].forEach(([a,b],i) => { tone(N(a), .16, {v:.09, det:6, t:t0 + i*.13}); tone(N(b), .16, {type:"triangle", v:.06, t:t0 + i*.13}); });
+      tone(N(84), .9, {v:.09, det:8, vib:6, t:t0 + .55, wet:.45}); tone(N(88), .9, {type:"triangle", v:.06, t:t0 + .55, wet:.45}); },
+    badge(){ [79,84,88,91,96].forEach((m,i) => tone(N(m), .15, {type:"triangle", v:.08, t:.15 + i*.06, wet:.55})); },
+    life(){ [60,64,67,72,76,79,84].forEach((m,i) => tone(N(m), .07, {v:.08, det:5, t:.1 + i*.05})); tone(N(84), .45, {type:"triangle", v:.07, t:.5, wet:.45}); },
+    warn(){ tone(N(57), .14, {v:.1, t:.6}); tone(N(57), .14, {v:.1, t:.82}); tone(N(57), .32, {v:.1, t:1.04, vib:8}); }
+  };
+})();
+
+// ---------- server ----------
+// Each pilot gets an anonymous id and secret token saved in this browser. No sign-up.
+let ME = ls.get("lo-player", null);
+let uid = ME ? ME.id : null, aiOK = true, online = false;
+let myDoc = null, LB = {today:[], best:[], total:[], counts:{}};
+const auth = () => ME ? {playerId: ME.id, token: ME.token} : {};
+async function api(path, body){
+  const opts = body ? {method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({...auth(), ...body})}
+                    : {headers: ME ? {"x-player-id": ME.id, "x-player-token": ME.token} : {}};
+  let r;
+  try { r = await fetch("/api/" + path, opts); } catch(e){ throw {code:"offline", status:0}; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw {code: j.code || "http_" + r.status, message: j.error || "", status: r.status};
+  return j;
+}
+async function ensurePlayer(){
+  if (ME) return ME;
+  const j = await api("player", {action:"create"});
+  ME = {id: j.id, token: j.token}; uid = ME.id; myDoc = j.player;
+  ls.set("lo-player", ME);
+  return ME;
+}
+async function refreshMe(){
+  if (!ME) return;
+  try { myDoc = (await api("me")).player; }
+  catch(e){ if (e.status === 401){ ME = null; uid = null; ls.set("lo-player", null); } }
+}
+async function refreshBoard(){
+  try { LB = await api("leaderboard"); online = true; } catch(e){ online = false; }
+  aiOK = online;
+}
+
+async function boot(){
+  renderAll();
+  startSpace();
+  try { document.fonts && document.fonts.load('20px "Press Start 2P"'); } catch(e){}
+  await Promise.all([refreshMe(), refreshBoard()]);
+  renderAll();
+  setInterval(() => {
+    if (S.page === "play" || document.hidden) return;
+    refreshBoard().then(() => { if (S.page !== "play"){ renderPane(); renderSide(); } });
+  }, 20000);
+}
+
+// ---------- game state ----------
+const DAILY_N = 7;
+const S = {page:"lobby", mode:"endless", pack:null, phase:"idle", score:0, lives:LIVES, round:0, bestPick:0, jackpots:0, used:[], combo:0, maxCombo:0, clean:0, runBadges:[], prevBest:0, recordHit:false, pauseUntil:0, pauseBudget:0,
+  log:[], queue:[], seen:[], current:null, left:SECS, timer:null, verdict:null, aiThisRun:true, notice:"", lbKind:"today", toastMsg:"", dailyLoading:false, dailyCache:null};
+let fetching = null;
+{ const h = (location.hash || "").slice(1); if (["lobby","leaderboard","stats","how"].includes(h)) S.page = h; }
+
+// UTC days so everyone shares the same Daily Flight.
+const dayKey = (off = 0) => new Date(Date.now() + off*864e5).toISOString().slice(0,10);
+const todayKey = () => dayKey(0);
+const prettyDate = k => new Date(k + "T12:00:00Z").toLocaleDateString(undefined, {month:"short", day:"numeric", timeZone:"UTC"});
+function untilTomorrow(){
+  const now = new Date(), next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  const m = Math.max(0, Math.round((next - now)/60000));
+  return `${Math.floor(m/60)}h ${m%60}m`;
+}
+
+async function launchUnlimited(){
+  SFX.unlock(); SFX.click();
+  let runId = null;
+  try { await ensurePlayer(); runId = (await api("run-start", {mode:"unlimited"})).runId; }
+  catch(e){
+    if (e.code === "rate_limited"){ toast(e.message); S.notice = e.message; }
+    else { toast("Couldn't reach the server. Your flight won't count toward the leaderboard."); banner("OFFLINE FLIGHT", "Server unreachable. This flight won't count.", "warn"); }
+  }
+  newRun("endless", null, null, runId);
+}
+function newRun(mode, pack, preset, runId){
+  SFX.unlock();
+  const prevBest = myStats().best || 0;
+  Object.assign(S,{page:"play", mode: mode || "endless", pack: pack || null, phase:"transit", score:0, lives:LIVES, round:0, bestPick:0, jackpots:0, used:[], log:[], queue:[], current:null, verdict:null, aiThisRun:aiOK, notice:"",
+    combo:0, maxCombo:0, clean:0, runBadges:[], prevBest, recordHit:false, pauseUntil:0, quitArm:0, runId: runId || null});
+  S.ranked = !!S.runId; S.aiThisRun = S.ranked;
+  if (!S.ranked && !S.notice) S.notice = "Couldn't reach the server, so this flight uses the built-in prompts and won't post to the leaderboard.";
+  if (preset){
+    S.queue = preset.map(x => ({...x}));
+    if (S.queue.some(x => x.book)) S.aiThisRun = false;
+  }
+  FX.reset();
+  goNext();
+}
+
+// Mix categories so the same one never comes up twice in a row.
+function interleave(items, lastCat){
+  const out = [], pool = items.slice();
+  while (pool.length){
+    const prev = out.length ? out[out.length-1].category : lastCat;
+    let i = pool.findIndex(x => x.category !== prev);
+    if (i < 0) i = 0;
+    out.push(pool.splice(i,1)[0]);
+  }
+  return out;
+}
+const SEEN_KEY = "lo-seen";
+const seenAll = () => { const a = ls.get(SEEN_KEY, []); return Array.isArray(a) ? a : []; };
+function markSeen(prompt){ const a = seenAll(); a.push(prompt); ls.set(SEEN_KEY, a.slice(-600)); }
+const seenSet = () => new Set([...seenAll(), ...S.seen, ...S.queue.map(x => x.prompt)].map(p => squash(p)));
+const fresh = items => { const ss = seenSet(), out = []; for (const x of items){ const k = squash(x.prompt); if (!ss.has(k)){ ss.add(k); out.push(x); } } return out; };
+const lastCategory = () => (S.queue.length ? S.queue[S.queue.length-1] : S.current || {}).category;
+
+function offlineBatch(){
+  const used = seenSet();
+  let pool = BOOK.filter(b => !used.has(squash(b[0])) && (!S.pack || !S.pack.book || S.pack.book.includes(b[1])));
+  if (pool.length < 3){ S.seen = []; pool = BOOK.filter(b => !S.pack || !S.pack.book || S.pack.book.includes(b[1])); if (pool.length < 2) pool = BOOK.slice(); }
+  return interleave(shuffle(pool.slice()).slice(0,6).map(b => ({prompt:b[0], category:b[1], book:b[2]})), lastCategory());
+}
+
+const PROMPT_STYLE = `Style: everyday, party game categories anyone understands instantly. NOT academic or nerdy trivia: no chemical elements, moons, bones, dates, capitals, or textbook lists.
+Make each one specific enough that not everything goes: roughly 25 to 80 valid answers, with a clear yes or no for any answer. Good: "Name a cereal with a cartoon mascot", "Name a sport played on ice", "Name something in a junk drawer", "Name a streaming service". Too loose: "Name a food", "Name something red".
+Vary the wording across prompts: mix "Name a …", "Name something you …", "Name a famous …", "Name something people …", and "Name a … that …". Aim for prompts people haven't heard before, not the usual party-game staples.
+Each needs obvious answers most people would say first AND specific, regional, or insider picks that would impress a friend.
+Rules: starts with "Name a", "Name an" or "Name something"; no real private people; under 70 characters.`;
+
+async function refill(wait){
+  if (S.mode === "daily") return;
+  if (S.queue.length >= 3) return;
+  if (!S.ranked) { S.queue.push(...offlineBatch()); return; }
+  if (!fetching){
+    fetching = api("prompts", {runId: S.runId, avoid: [...seenAll().slice(-60), ...S.seen.slice(-20)]})
+      .then(j => { const f = fresh(j.prompts || []); if (!f.length) throw {code:"all_seen"}; S.queue.push(...interleave(shuffle(f), lastCategory())); })
+      .catch(() => { S.queue.push(...offlineBatch()); })
+      .finally(() => { fetching = null; });
+  }
+  if (wait || !S.queue.length) await fetching;
+}
+
+// ---------- Daily Flight: 7 shared prompts per day ----------
+function seeded(str){ let h = 2166136261; for (const ch of str) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return () => { h += 0x6D2B79F5; let t = h; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function seededBook(date){
+  const rnd = seeded("liftoff-" + date), pool = BOOK.slice();
+  for (let i=pool.length-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [pool[i],pool[j]] = [pool[j],pool[i]]; }
+  return interleave(pool.slice(0, DAILY_N).map(b => ({prompt:b[0], category:b[1], book:b[2]})));
+}
+function dailyResult(){
+  const st = myStats(), t = todayKey();
+  if (st.daily && st.daily.date === t) return st.daily;
+  if (ls.get("lo-daily-start", "") === t && !online) return {date:t, score:0, rounds:0, incomplete:true};
+  return null;
+}
+const currentStreak = st => (st.lastDaily === todayKey() || st.lastDaily === dayKey(-1)) ? (st.dailyStreak || 0) : 0;
+async function startDaily(){
+  if (dailyResult() || S.dailyLoading) return;
+  SFX.unlock(); SFX.click();
+  S.dailyLoading = true; renderAll();
+  try {
+    await ensurePlayer();
+    const j = await api("run-start", {mode:"daily"});
+    S.dailyLoading = false;
+    ls.set("lo-daily-start", todayKey());
+    newRun("daily", null, j.prompts, j.runId);
+  } catch(e){
+    S.dailyLoading = false;
+    if (e.code === "daily_taken"){ ls.set("lo-daily-start", todayKey()); await refreshMe(); toast("You've already flown today's Daily Flight."); }
+    else toast(e.status === 0 ? "Couldn't reach the server. Check your connection and try again." : (e.message || "Couldn't start the Daily Flight. Try again in a minute."));
+    renderAll();
+  }
+}
+
+const runOver = () => S.lives <= 0 || (S.mode === "daily" && S.round >= DAILY_N);
+
+function nextRound(){
+  if (runOver()) return endRun();
+  if (!S.queue.length) { S.phase = "loading"; renderAll(); return refill(true).then(nextRound); }
+  const prevCat = S.current && S.current.category;
+  const k = S.queue.findIndex(x => x.category !== prevCat);
+  if (k > 0) S.queue.unshift(S.queue.splice(k,1)[0]);
+  S.current = S.queue.shift();
+  S.seen.push(S.current.prompt);
+  if (S.mode !== "daily") markSeen(S.current.prompt);
+  S.round++; S.left = SECS; S.verdict = null; S.phase = "play";
+  S.bounce = null; S.bounced = {}; S.expired = false; S.pending = ""; S.pauseUntil = 0; S.pauseBudget = 12000;
+  prepList(S.current); S.queue.slice(0,2).forEach(prepList);
+  renderAll();
+  const inp = $("ans"); if (inp) inp.focus();
+  clearInterval(S.timer);
+  let lastTick = Date.now(), lastSec = SECS;
+  S.timer = setInterval(() => {
+    const now = Date.now(), dt = (now - lastTick)/1000; lastTick = now;
+    if (S.phase !== "play") return; // paused while the judge checks an answer
+    if (now < S.pauseUntil){ paintTimer(); return; } // paused while a correction is showing
+    S.left = Math.max(0, S.left - dt);
+    const sec = Math.ceil(S.left);
+    if (sec !== lastSec){ lastSec = sec; if (sec <= 5 && sec > 0) SFX.tick(sec === 1); }
+    paintTimer();
+    if (S.left <= 0) { clearInterval(S.timer); finish(null); }
+  }, 100);
+  refill(false);
+}
+
+// Exact answers only. Capitalization, punctuation, accents, spacing and plurals don't matter; spelling does.
+const squash = t => norm(t).replace(/ /g,"");
+const titleCase = w => w.replace(/\b\w/g, c => c.toUpperCase());
+function lev(a, b){
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({length:n+1}, (_,j) => j);
+  for (let i=1;i<=m;i++){ const cur = [i]; for (let j=1;j<=n;j++) cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1] + (a[i-1]===b[j-1] ? 0 : 1)); prev = cur; }
+  return prev[n];
+}
+const sameForm = (a, n) => n === a || n + "s" === a || n + "es" === a || a + "s" === n || a + "es" === n || (n.endsWith("y") && n.slice(0,-1) + "ies" === a);
+// The single closest known answer to what was typed, or null.
+function closest(a, words, raw){
+  // Only true typos get a correction: same answer, a letter or two off. Never a different or longer answer.
+  const lim = a.length >= 8 ? 2 : a.length >= 4 ? 1 : 0, an = norm(raw || a);
+  if (!lim) return null;
+  let best = null, bd = 99;
+  for (const w of words){
+    const n = squash(w); if (!n) continue;
+    if (norm(w).startsWith(an + " ")) continue;
+    if (Math.abs(n.length - a.length) > lim) continue;
+    const d = lev(a, n); if (d > lim || d === 0) continue;
+    if (d < bd){ bd = d; best = w; }
+  }
+  return best;
+}
+const isTypoOf = (sug, ans) => { const a = squash(ans), n = squash(sug); return !!n && n !== a && lev(a, n) <= Math.max(2, Math.ceil(a.length*.3)); };
+
+function judgeOffline(ans){
+  const a = squash(ans), book = S.current.book;
+  const extra = {common:book[0].slice(0,4).map(titleCase), rare:titleCase(book[3][Math.floor(Math.random()*book[3].length)])};
+  for (let t=0;t<4;t++) for (const w of book[t]) if (sameForm(a, squash(w)))
+    return {valid:true, score:bookScore(t, book[t].indexOf(w), book[t].length), canonical:titleCase(w), ...extra};
+  const sug = closest(a, book.flat(), ans);
+  if (sug) return {bounce:true, kind:"typo", suggestion:titleCase(sug)};
+  return {valid:false, note:"Not on the list for this one.", ...extra};
+}
+// Instant check against the answer list fetched for this prompt. Returns null when the answer isn't known.
+function judgeList(ans, list){
+  const a = squash(ans);
+  for (const [w, sc] of list) if (sameForm(a, squash(w))){
+    const rares = list.filter(x => x[1] >= 80);
+    return {valid:true, score:clamp(Math.round(sc) || 1, 1, 100), canonical:w, note:"",
+            common:list.slice(0,3).map(x => x[0]), rare:(rares.length ? rares[Math.floor(Math.random()*rares.length)] : list[list.length-1])[0]};
+  }
+  const sug = closest(a, list.map(x => x[0]), ans);
+  return sug ? {bounce:true, kind:"typo", suggestion:sug} : null;
+}
+function prepList(item){
+  if (!item || item.book || item.listing || !S.ranked) return;
+  item.listing = api("list", {prompt: item.prompt})
+    .then(j => { item.list = Array.isArray(j.list) && j.list.length ? j.list : null; })
+    .catch(() => { item.list = null; });
+}
+
+// The server decides every score. It returns the verdict plus the flight's new state.
+async function judgeServer(ans){
+  const j = await api("judge", {runId: S.runId, prompt: S.current.prompt, answer: ans});
+  if (j.status === "bounce") return {bounce:true, kind:j.kind, suggestion:j.suggestion};
+  if (j.status === "error") return {valid:false, error:true, note:j.note};
+  const extra = {common:j.common || [], rare:j.rare || "", note:j.note || "", state:j.state};
+  if (j.status === "valid") return {valid:true, score:j.score, canonical:j.canonical, ...extra};
+  return {valid:false, timeout:!!j.timeout, ...extra};
+}
+
+async function submit(ans){
+  if (S.phase !== "play") return;
+  const key = squash(ans);
+  if (!key) return;
+  const prev = S.bounced[key];
+  // A repeat of something the judge or the offline book already bounced gets the same answer instantly.
+  if (prev && prev.src !== "list") { S.bounce = prev; SFX.deny(); renderAll(); refocus(); return; }
+  let v = null;
+  if (!S.ranked) v = S.current.book ? judgeOffline(ans) : {valid:false, note:"Not on the list for this one."};
+  else if (!prev && S.current.list){ const lv = judgeList(ans, S.current.list); if (lv && lv.bounce) v = lv; }
+  if (v && v.bounce) return bounce(ans, key, v, S.ranked ? "list" : "book");
+  SFX.lock();
+  if (v) return finish(ans, v);
+  S.phase = "judging"; S.pending = ans; S.bounce = null; renderAll();
+  try { v = await judgeServer(ans); }
+  catch(e){ v = {valid:false, error:true, note:"The judge didn't answer. This round doesn't count against you."}; }
+  if (S.phase !== "judging") return;
+  if (v.bounce){
+    if (S.expired) return finish(null);
+    return bounce(ans, key, v, "ai");
+  }
+  if (v.valid && S.current.list) S.current.list.push([v.canonical, v.score]);
+  finish(ans, v);
+}
+function bounce(ans, key, v, src){
+  const first = !S.bounced[key];
+  v.answer = ans; v.src = src; S.bounced[key] = v;
+  if (first && S.pauseBudget > 0){ const ms = Math.min(6000, S.pauseBudget); S.pauseBudget -= ms; S.pauseUntil = Date.now() + ms; }
+  S.bounce = v; S.pending = ans; S.phase = "play"; SFX.deny();
+  renderAll(); refocus();
+}
+function refocus(){
+  const inp = $("ans"); if (!inp) return;
+  inp.focus(); inp.select();
+  if (!reduceMotion){ inp.classList.remove("shake"); void inp.offsetWidth; inp.classList.add("shake"); }
+}
+
+function finish(ans, v){
+  clearInterval(S.timer);
+  if (S.page !== "play" || (S.phase !== "play" && S.phase !== "judging")) return;
+  if (ans == null) {
+    v = {valid:false, timeout:true, note:"Time ran out."};
+    if (S.current.book) { v.common = S.current.book[0].slice(0,4).map(titleCase); v.rare = titleCase(S.current.book[3][0]); }
+    if (S.ranked) api("judge", {runId: S.runId, prompt: S.current.prompt, answer: null}).catch(() => {});
+  }
+  v.answer = ans;
+  if (v.error) { v.pts = 0; }
+  else if (v.valid) {
+    v.tier = bandOf(v.score);
+    S.combo = v.score >= 56 ? S.combo + 1 : 0;
+    v.combo = S.combo;
+    v.bonus = S.combo >= 2 ? Math.min(30, (S.combo - 1)*10) : 0;
+    v.pts = v.score + v.bonus;
+    S.maxCombo = Math.max(S.maxCombo, S.combo);
+    S.clean++;
+    if (v.score >= 91 && S.lives < LIVES && S.mode !== "daily"){ S.lives++; v.repaired = true; }
+    S.score += v.pts;
+    if (v.state){ S.score = v.state.score; S.lives = v.state.lives; S.combo = v.state.combo; }
+    S.bestPick = Math.max(S.bestPick, v.score);
+    if (v.tier === 6) S.jackpots++;
+    const dur = FX.scored(v.pts, v.tier, S.score);
+    SFX.score(v.tier, v.score, dur);
+    if (v.tier === 6) flash("gold");
+    if (v.bonus){ banner("COMBO x" + S.combo, "+" + v.bonus + " bonus points", "combo"); SFX.combo(S.combo); }
+    if (v.repaired){ banner("LIFE REPAIRED", "Ultra niche answers fix an engine", "life"); SFX.life(); }
+    if (v.score >= 91) award("ultra");
+    if (S.combo >= 3) award("combo3");
+    if (v.repaired) award("mechanic");
+    if (S.clean >= 5) award("flawless");
+    if (S.score >= 250) award("orbit");
+    if (S.score >= 500) award("moon");
+    if (S.score >= 900) award("deep");
+    if (v.score >= 56) award("rare1");
+    if (v.score >= 76) award("niche1");
+    if (v.score === 100) award("perfect");
+    if (S.jackpots >= 3) award("hattrick");
+    if (S.combo >= 5) award("combo5");
+    if (S.clean >= 10) award("flawless10");
+    if (S.left >= SECS - 5) award("quick");
+    if (S.left <= 2) award("clutch");
+    if (Object.keys(S.bounced || {}).length) award("proof");
+    if (S.mode !== "daily" && S.lives === 1 && v.score >= 76) award("comeback");
+    if (S.score >= 25) award("clouds");
+    if (S.score >= 100) award("strato");
+    if (S.score >= 1500) award("interstellar");
+    if (S.score >= 2500) award("voyager");
+  } else {
+    if (S.mode !== "daily") S.lives--;
+    v.pts = 0; S.combo = 0; S.clean = 0;
+    if (v.state){ S.score = v.state.score; S.lives = v.state.lives; }
+    FX.missed("MISS");
+    v.timeout ? SFX.timeout() : SFX.miss();
+    flash("");
+    if (S.mode !== "daily" && S.lives === 1){ banner("LAST LIFE", "One more miss ends the flight", "warn"); SFX.warn(); }
+  }
+  S.log.unshift({n:S.round, prompt:S.current.prompt, v});
+  S.verdict = v; S.phase = "result"; S.bounce = null; S.revealed = false;
+  renderAll();
+  const token = S.log.length, hold = v.valid ? (reduceMotion ? 1400 : FX.dur*1000 + 1400) : v.error ? 1200 : 2000;
+  setTimeout(() => {
+    if (S.page !== "play" || S.phase !== "result" || S.log.length !== token) return;
+    S.revealed = true; renderAll();
+    const nb = $("nextBtn"); if (nb) nb.focus();
+  }, hold);
+}
+
+// Badges and pop-up banners
+function award(id){
+  if (earnedBadges().has(id)) return;
+  const b = BADGES.find(x => x.id === id); if (!b) return;
+  S.runBadges.push(id);
+  banner("BADGE UNLOCKED", b.name, "badge"); SFX.badge();
+}
+const BQ = []; let bBusy = false;
+function banner(title, sub, kind){ BQ.push({title, sub, kind}); if (!bBusy) nextBanner(); }
+function nextBanner(){
+  const b = BQ.shift(), box = $("banner");
+  if (!b){ bBusy = false; box.hidden = true; return; }
+  bBusy = true;
+  box.className = "banner " + (b.kind || "");
+  $("bnTitle").textContent = b.title; $("bnSub").textContent = b.sub || "";
+  box.hidden = false; void box.offsetWidth; box.classList.add("go");
+  setTimeout(nextBanner, reduceMotion ? 1600 : 1900);
+}
+
+function flash(kind){
+  if (reduceMotion) return;
+  const f = $("flash"); f.className = "flash"; void f.offsetWidth; f.className = "flash go" + (kind ? " " + kind : "");
+}
+
+async function endRun(){
+  if (S.phase === "over") return;
+  clearInterval(S.timer);
+  award("first");
+  const st = myStats(), runs = (st.runs || 0) + 1;
+  if (runs >= 10) award("frequent");
+  if (runs >= 25) award("veteran");
+  if (runs >= 50) award("acepilot");
+  if ((st.total || 0) + S.score >= 5000) award("mileage");
+  if (S.mode !== "daily" && S.round >= 20) award("marathon");
+  if (S.mode === "daily" && S.round >= DAILY_N){
+    if (S.log.every(r => r.v.valid || r.v.error)) award("clean");
+    if (S.score >= 400) award("dailyace");
+    const t = todayKey(), streak = st.lastDaily === t ? (st.dailyStreak || 1) : st.lastDaily === dayKey(-1) ? (st.dailyStreak || 0) + 1 : 1;
+    if (streak >= 3) award("regular");
+    if (streak >= 7) award("weekly");
+    const others = rowsFor("today").filter(r => r.id !== uid);
+    if (others.length && others.every(r => r.v < S.score)) award("topday");
+  }
+  S.phase = "over"; S.revealed = true; S.page = "results"; S.toastMsg = "";
+  renderAll();
+  SFX.over();
+  if (S.score > 0 && S.score > S.prevBest){ SFX.best(); if (S.prevBest > 0) flash("gold"); }
+  await postRun();
+  if (S.page === "results") renderAll();
+}
+
+// ---------- persistence (stored in points, shown as km) ----------
+function localStats(){ return ls.get("ls-stats", {best:0,total:0,runs:0,jackpots:0,bestPick:0,bestCombo:0,badges:[],recent:[],daily:null,dailyStreak:0,lastDaily:null}); }
+// Red is a miss, then it climbs: orange, yellow, green, bright green, star, glowing star.
+const EMO = ["🟧","🟨","🟩","💚","⭐","🌟"], MISS_EMO = "🟥";
+const V1 = ["⬜","🟦","🟩","🟨","🟧","🟪"], V2 = ["🟥","🟧","🟨","🟩","💚","🌟"];
+// Grids saved with older colors get translated so every grid reads the same way.
+const showGrid = d => {
+  if (!d || !d.grid) return "";
+  if (d.gridV === 3) return d.grid;
+  const map = d.gridV === 2 ? V2 : V1;
+  return Array.from(d.grid).map(ch => ch === "⬛" ? MISS_EMO : (map.indexOf(ch) >= 0 ? EMO[map.indexOf(ch)] : ch)).join("");
+};
+const TIER_NAMES = ["Basic","Common","Solid","Rare","Niche","Ultra niche"];
+// Turn a saved grid into colored blocks: red for a miss, then orange up to neon green.
+function gridBlocks(str, small){
+  const w = el("span",{class:"cells" + (small ? " sm" : "")});
+  const tiers = Array.from(str || "").map(ch => ch === MISS_EMO ? 0 : EMO.indexOf(ch) + 1).filter(n => n >= 0);
+  tiers.forEach(n => w.append(el("span",{class:"cell " + (n ? "t" + n : "m"), title: n ? TIER_NAMES[n-1] : "Miss"})));
+  w.setAttribute("aria-label", tiers.map(n => n ? TIER_NAMES[n-1] : "Miss").join(", "));
+  w.setAttribute("role","img");
+  return w;
+}
+function gridLegend(){
+  return el("div",{class:"legend"}, el("span",null, el("i",{class:"cell sm m"}), document.createTextNode("Miss")),
+    ...TIER_NAMES.map((n,i) => el("span",null, el("i",{class:"cell sm t" + (i+1)}), document.createTextNode(n))));
+}
+const shareGrid = () => S.log.slice().reverse().map(r => r.v.valid ? EMO[r.v.tier-1] : MISS_EMO).join("");
+function shareText(){
+  const head = S.mode === "daily" ? "LIFTOFF Daily · " + prettyDate(todayKey()) : S.mode === "pack" ? "LIFTOFF · " + S.pack.name + " pack" : "LIFTOFF Unlimited";
+  return `${head}\n${km(S.score)} km · ${ZONES[zoneIdx(S.score)].name}\n${shareGrid()}`;
+}
+function merged(d, run){
+  d = d || {};
+  const t = todayKey(), y = dayKey(-1), daily = S.mode === "daily";
+  return {
+    best: Math.max(d.best||0, S.score),
+    total: (d.total||0) + S.score,
+    runs: (d.runs||0) + 1,
+    jackpots: (d.jackpots||0) + S.jackpots,
+    bestPick: Math.max(d.bestPick||d.bestStreak||0, S.bestPick),
+    bestCombo: Math.max(d.bestCombo||0, S.maxCombo),
+    badges: [...new Set([...(Array.isArray(d.badges) ? d.badges : []), ...S.runBadges])],
+    recent: [run, ...(Array.isArray(d.recent)?d.recent:[])].slice(0,8),
+    daily: daily ? {date:t, score:S.score, rounds:S.round, grid:shareGrid(), gridV:3} : (d.daily || null),
+    dailyStreak: daily ? (d.lastDaily === t ? (d.dailyStreak||1) : d.lastDaily === y ? (d.dailyStreak||0) + 1 : 1) : (d.dailyStreak || 0),
+    lastDaily: daily ? t : (d.lastDaily || null),
+    handle: d.handle || "",
+    updatedAt: Date.now()
+  };
+}
+async function postRun(){
+  const run = {score:S.score, races:S.round, at:Date.now(), mode:S.mode};
+  if (S.ranked){
+    try {
+      const j = await api("run-end", {runId: S.runId, badges: S.runBadges});
+      myDoc = j.player;
+      await refreshBoard();
+      toast(S.score > 0 && S.score >= (myDoc.best || 0) ? "New personal best. It's on the leaderboard." : "Flight posted to the leaderboard.");
+      return;
+    } catch(e){ toast("Couldn't post this flight. Saved on this device instead."); }
+  } else {
+    toast("This flight was played offline, so it's saved on this device only.");
+  }
+  ls.set("ls-stats", merged(localStats(), run));
+}
+async function saveHandle(ev){
+  ev.preventDefault(); SFX.click();
+  const h = $("handleInput").value.trim().replace(/\s+/g," ");
+  if (h.length < 2) return toast("Names need at least 2 characters.");
+  try {
+    await ensurePlayer();
+    myDoc = (await api("player", {action:"rename", name:h})).player;
+    toast("Name saved. It shows on the leaderboard.");
+    refreshBoard().then(() => { if (S.page !== "play"){ renderPane(); renderSide(); } });
+  } catch(e){ toast(e.message || "Couldn't save the name. Try again."); }
+}
+function toast(m){ S.toastMsg = m; const t = $("myToast"); if (t) t.textContent = m; }
+
+// ---------- space scene ----------
+const FLAME = [
+  null,
+  {core:"#FFE9C4", mid:"rgba(255,138,61,.95)", glow:"rgba(255,110,40,", smoke:"205,208,222", spark:"#FFB066"},
+  {core:"#FFF3D6", mid:"rgba(255,160,64,.95)", glow:"rgba(255,140,50,", smoke:"210,214,228", spark:"#FFC070"},
+  {core:"#FFFBEA", mid:"rgba(255,196,77,.95)", glow:"rgba(255,170,60,", smoke:"214,218,234", spark:"#FFD27A"},
+  {core:"#FFFFFF", mid:"rgba(255,232,150,.95)", glow:"rgba(255,200,90,", smoke:"205,212,245", spark:"#FFF0A8"},
+  {core:"#FFFFFF", mid:"rgba(150,210,255,.95)", glow:"rgba(90,160,255,", smoke:"190,210,255", spark:"#BFE4FF"},
+  {core:"#FFFFFF", mid:"rgba(200,160,255,.95)", glow:"rgba(160,100,255,", smoke:"220,200,255", spark:"#FFD166"}
+];
+const FX = {
+  alt:0, from:0, to:0, t0:0, dur:0, travel:0, lift:0, rings:[], wisps:[], burnStart:0, burnEnd:0, power:0, band:1, misfire:0, lastZone:0,
+  pending:[],
+  reset(){ this.travel = 0; this.lift = 0; this.rings = []; this.wisps = []; this.alt = this.from = this.to = 0; this.dur = 0; this.burnEnd = 0; this.misfire = 0; this.lastZone = 0; P.length = 0; this.pending = []; },
+  scored(score, band, total){
+    const now = performance.now();
+    const dur = reduceMotion ? .5 : 1.6 + 2.4*Math.min(1, score/100);
+    this.from = this.alt; this.to = total; this.t0 = now; this.dur = dur;
+    this.band = band; this.power = Math.min(1, .25 + .75*score/100);
+    this.burnStart = now; this.burnEnd = now + dur*1000;
+    this.pending.push({text:"+" + score, band, kind:"ink"});
+    this.rings.push({t:0, big:Math.min(1, score/100)});
+    if (score >= 76) this.rings.push({t:-.25, big:Math.min(1, score/100)});
+    return dur;
+  },
+  missed(text){
+    this.misfire = 1;
+    this.pending.push({text, band:0, kind:"miss"});
+  }
+};
+const P = [];
+const spawn = o => { if (P.length < 1800) P.push(o); };
+
+// Sky color by altitude (points): light blue at the ground, darkening slowly into space.
+const SKY = [[0,[176,222,255]],[60,[132,198,246]],[150,[84,152,226]],[260,[44,98,188]],[380,[18,46,120]],[520,[8,16,52]],[720,[4,5,16]],[1000,[9,4,22]]];
+function skyRGB(a){
+  a = Math.max(0, a);
+  for (let i=1;i<SKY.length;i++){ if (a <= SKY[i][0]){ const [a1,c1] = SKY[i-1], [a2,c2] = SKY[i]; const t = (a-a1)/(a2-a1); return c1.map((v,k) => Math.round(v + (c2[k]-v)*t)); } }
+  return SKY[SKY.length-1][1];
+}
+const rgb = c => `rgb(${c.join(",")})`;
+const lum = c => (.2126*c[0] + .7152*c[1] + .0722*c[2])/255;
+
+// Pixel sprites for things you pass on the way up.
+const SPR = {
+  bird1:["1.....1",".1...1.","..111..","......."],
+  bird2:[".......","..111..",".1...1.","1.....1"],
+  balloon:["..22222..",".2233322.","223333322","223333322","223333322",".2233322.","..23332..","...232...","...4.4...","...4.4...","...555...","...555..."],
+  plane:[".1................",".11...............",".111111111111111..","11w1w1w1w1w1w11111",".111111111111111..","......11..........",".....11..........."],
+  jet:["1...........","11....1.....","1111111111..","111111111111","......1....."],
+  wballoon:["..111..",".11111.","1111111","1111111","1111111",".11111.","..111..","...2...","...2...","...2...","..333.."],
+  sat:["PPPP.....PPPP","PPPP..G..PPPP","PPPPGGGGGPPPP","PPPPGGYGGPPPP","PPPPGGGGGPPPP","PPPP..G..PPPP","PPPP.....PPPP"],
+  astro:["..WWWW..",".WVVVVW.",".WVVVVW.","..WWWW..",".WWWWWWB","W.WWWW.B","W.WWWW..","..W..W..",".WW..WW."],
+  ufo:[".....CCCCC.....","....CCAACCC....","...CCCAACCCC...",".SSSSSSSSSSSSS.","SSYSSSYSSSYSSSS",".SSSSSSSSSSSSS.","...SSS...SSS..."],
+  alien1:["...G...G...","....G.G....","...GGGGG...","..GGGGGGG..","..GKGGGKG..","..GGGGGGG..","G..GGGGG..G",".GGGGGGGGG.","...GG.GG...","...G...G..."],
+  alien2:["...G...G...","....G.G....","...GGGGG...","..GGGGGGG..","..GKGGGKG..","..GGGGGGG..","...GGGGG...","GGGGGGGGGGG","...GG.GG...","...G...G..."],
+  tree:["..1..",".111.","11111",".111.","11111","..2.."]
+};
+const PAL = {
+  bird:{"1":"#1C2433"}, balloon:{"2":"#E2453C","3":"#FFD166","4":"#6B4A2B","5":"#8B5A2B"},
+  plane:{"1":"#F2F5FF","w":"#3A6FB0"}, jet:{"1":"#6E7B93"}, wballoon:{"1":"#F4F4F4","2":"#777777","3":"#C0392B"},
+  satOn:{P:"#2E5BD8",G:"#C9CED8",Y:"#FFD166"}, satOff:{P:"#2E5BD8",G:"#C9CED8",Y:"#FF4D6D"},
+  astro:{W:"#F4F6FA",V:"#5CE1FF",B:"#8A93A6"},
+  ufoOn:{C:"#7FE7FF",A:"#7CFC7C",S:"#B8C0D0",Y:"#FFD166"}, ufoOff:{C:"#7FE7FF",A:"#7CFC7C",S:"#B8C0D0",Y:"#FF4D6D"},
+  alien:{G:"#7CFC7C",K:"#10301A"}, tree:{"1":"#2C6A3B","2":"#5A3A22"}
+};
+function sprite(c, rows, pal, cx, cy, k, flip){
+  const h = rows.length, w = rows[0].length, x0 = cx - w*k/2, y0 = cy - h*k/2, kk = Math.ceil(k);
+  for (let y=0;y<h;y++) for (let x=0;x<w;x++){
+    const ch = rows[y][flip ? w-1-x : x]; if (ch === ".") continue;
+    c.fillStyle = pal[ch]; c.fillRect(Math.round(x0 + x*k), Math.round(y0 + y*k), kk, kk);
+  }
+}
+// Things in the sky, placed by altitude band (same layout every flight).
+SPR.kite = ["...1...","..121..",".12221.","1222221",".12221.","..121..","...3...","..3....","...3..."];
+SPR.heli1 = ["111111111111....","......1.........","...2222222......","..224422222222..","...2222222......","...3....3.......","..3333333333...."];
+SPR.heli2 = ["...1111111111...","......1.........","...2222222......","..224422222222..","...2222222......","...3....3.......","..3333333333...."];
+SPR.blimp = ["....222222222222....","..2222222222222222..",".222222255552222222.",".222222222222222222.","..2222222222222222..","....222222222222....","........4444........"];
+SPR.asteroid = ["..1111..",".122211.","12212221","12222121","11222211",".112211.","..111..."];
+SPR.junk = ["1.11.","11111",".1.1."];
+PAL.kite = {"1":"#FF4D6D","2":"#FFD166","3":"#FFFFFF"};
+PAL.heli = {"1":"#2B2F3A","2":"#E2453C","3":"#2B2F3A","4":"#9FD8FF"};
+PAL.blimp = {"2":"#C9CED8","4":"#5A6170","5":"#FF7A3D"};
+PAL.asteroid = {"1":"#6B6670","2":"#8E8894"};
+PAL.junk = {"1":"#9AA3B5"};
+const PLANET_COL = [["#FF9F6B","#B8452A"],["#6BD3FF","#1E5FA8"],["#B6FF8A","#3C8A2E"],["#FF7AB8","#7A2A6A"]];
+
+const CREATURES = (() => {
+  const rnd = seeded("liftoff-sky"), out = [];
+  const pick = arr => arr[Math.floor(rnd()*arr.length)];
+  const add = (t, a, speed, extra) => out.push({t, a, x:rnd(), vx:(rnd() < .5 ? -1 : 1) * speed * (.6 + rnd()*.8), n:3 + Math.floor(rnd()*3), ...(extra || {})});
+  for (let a = 4; a < 2600; a += 4 + rnd()*6 + (a > 900 ? 6 : 0)){
+    if (a < 16) add(pick(["bird","bird","kite"]), a, 30);
+    else if (a < 45) add(pick(["bird","balloon","heli","kite","bird"]), a, 32);
+    else if (a < 110) add(pick(["balloon","plane","blimp","bird","heli","plane"]), a, 45);
+    else if (a < 250) add(pick(["jet","wballoon","plane","jet"]), a, 120);
+    else if (a < 500) add(pick(["sat","sat","station","astro","junk","meteor","junk"]), a, 16);
+    else if (a < 900) add(pick(["asteroid","ufo","astro","meteor","sat","asteroid"]), a, 20);
+    else add(pick(["ufo","alien","comet","asteroid","asteroid","meteor","alien"]), a, 34);
+  }
+  out.push({t:"aurora", a:198, x:.1, vx:0}, {t:"aurora", a:226, x:.6, vx:0});
+  [1000, 1350, 1750, 2200].forEach((a,i) => out.push({t:"planet", a, x:[.15,.82,.3,.7][i], vx:0, hue:i}));
+  [1180, 1600, 2050, 2450].forEach((a,i) => out.push({t:"galaxy", a, x:[.78,.2,.65,.25][i], vx:0}));
+  return out;
+})();
+
+function drawCreatures(c, t, W, H, yOf, k){
+  const span = W + 240;
+  for (const o of CREATURES){
+    const y0 = yOf(o.a); if (y0 < -90 || y0 > H + 90) continue;
+    const x = (((o.x*span + o.vx*t) % span) + span) % span - 120, flip = o.vx < 0, dir = flip ? -1 : 1;
+    switch (o.t){
+      case "bird":
+        for (let i=0;i<o.n;i++){
+          const fr = Math.floor(t*6 + i*1.7) % 2 ? SPR.bird1 : SPR.bird2;
+          const rank = Math.ceil(i/2), side = i%2 ? 1 : -1;
+          sprite(c, fr, PAL.bird, x - dir*rank*9*k, y0 + side*rank*5*k + Math.sin(t*2 + i)*2, k*.8, false);
+        }
+        break;
+      case "balloon": sprite(c, SPR.balloon, PAL.balloon, x, y0 + Math.sin(t*.8 + o.x*9)*3, k*1.1, false); break;
+      case "plane":
+        c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = k*1.2;
+        c.beginPath(); c.moveTo(x - dir*9*k, y0); c.lineTo(x - dir*(9*k + 220), y0); c.stroke();
+        sprite(c, SPR.plane, PAL.plane, x, y0, k, flip); break;
+      case "jet":
+        c.strokeStyle = "rgba(255,255,255,.45)"; c.lineWidth = k*.8;
+        c.beginPath(); c.moveTo(x - dir*6*k, y0); c.lineTo(x - dir*(6*k + 300), y0); c.stroke();
+        sprite(c, SPR.jet, PAL.jet, x, y0, k, flip); break;
+      case "wballoon": sprite(c, SPR.wballoon, PAL.wballoon, x, y0 + Math.sin(t*.6)*2, k, false); break;
+      case "sat": case "station":
+        sprite(c, SPR.sat, Math.sin(t*4 + o.x*20) > 0 ? PAL.satOn : PAL.satOff, x, y0, o.t === "station" ? k*1.8 : k, false); break;
+      case "astro":
+        c.save(); c.translate(x, y0 + Math.sin(t*.7)*4); c.rotate(t*.35 + o.x*6);
+        sprite(c, SPR.astro, PAL.astro, 0, 0, k, false); c.restore(); break;
+      case "ufo": {
+        const y = y0 + Math.sin(t*2 + o.x*10)*5;
+        if (Math.sin(t*.7 + o.x*10) > .55){
+          c.fillStyle = "rgba(124,252,124,.16)";
+          c.beginPath(); c.moveTo(x - 4*k, y + 3*k); c.lineTo(x + 4*k, y + 3*k); c.lineTo(x + 12*k, y + 34*k); c.lineTo(x - 12*k, y + 34*k); c.closePath(); c.fill();
+        }
+        sprite(c, SPR.ufo, Math.floor(t*3) % 2 ? PAL.ufoOn : PAL.ufoOff, x, y, k, false); break;
+      }
+      case "alien": sprite(c, Math.floor(t*2.5 + o.x*7) % 2 ? SPR.alien1 : SPR.alien2, PAL.alien, x, y0 + Math.sin(t*1.3 + o.x*5)*6, k, false); break;
+      case "kite": {
+        const y = y0 + Math.sin(t*1.6 + o.x*9)*6;
+        c.save(); c.translate(x, y); c.rotate(Math.sin(t*1.2 + o.x*5)*.25); sprite(c, SPR.kite, PAL.kite, 0, 0, k, false); c.restore(); break;
+      }
+      case "heli": sprite(c, Math.floor(t*14) % 2 ? SPR.heli1 : SPR.heli2, PAL.heli, x, y0 + Math.sin(t*2 + o.x*7)*3, k, flip); break;
+      case "blimp": sprite(c, SPR.blimp, PAL.blimp, x, y0 + Math.sin(t*.5 + o.x*4)*4, k*1.3, flip); break;
+      case "asteroid":
+        c.save(); c.translate(x, y0); c.rotate(t*(.2 + o.x*.6) * dir); sprite(c, SPR.asteroid, PAL.asteroid, 0, 0, k*(1 + o.x), false); c.restore(); break;
+      case "junk":
+        c.save(); c.translate(x, y0); c.rotate(t*1.5*dir); sprite(c, SPR.junk, PAL.junk, 0, 0, k, false); c.restore(); break;
+      case "meteor": {
+        const ph = ((t*.35 + o.x*7) % 1); if (ph > .4) break;
+        const mx = o.x*W + ph*W*.9*dir, my = y0 + ph*120;
+        const mg = c.createLinearGradient(mx, my, mx - dir*120, my - 50);
+        mg.addColorStop(0, "rgba(255,240,200,.95)"); mg.addColorStop(1, "rgba(255,160,90,0)");
+        c.strokeStyle = mg; c.lineWidth = 2.5; c.beginPath(); c.moveTo(mx, my); c.lineTo(mx - dir*120, my - 50); c.stroke(); c.lineWidth = 1;
+        c.fillStyle = "#FFF6DA"; c.fillRect(mx - 2, my - 2, 4, 4); break;
+      }
+      case "aurora":
+        for (let b=0;b<3;b++){
+          c.beginPath();
+          for (let ax=0; ax<=W+24; ax+=24){ const yy = y0 + Math.sin(ax*.007 + t*.5 + b*1.9 + o.x*6)*22 + b*16; ax === 0 ? c.moveTo(ax, yy) : c.lineTo(ax, yy); }
+          c.strokeStyle = ["rgba(124,252,180,.32)","rgba(92,225,255,.22)","rgba(199,125,255,.22)"][b]; c.lineWidth = 16 - b*4; c.stroke();
+        }
+        c.lineWidth = 1; break;
+      case "planet": {
+        const pr = 18*k, [c1,c2] = PLANET_COL[o.hue % PLANET_COL.length], px = o.x*W;
+        const pg = c.createRadialGradient(px - pr*.4, y0 - pr*.4, pr*.2, px, y0, pr); pg.addColorStop(0, c1); pg.addColorStop(1, c2);
+        c.fillStyle = pg; c.beginPath(); c.arc(px, y0, pr, 0, 6.29); c.fill();
+        c.fillStyle = "rgba(0,0,0,.15)"; for (let i=-1;i<=1;i++){ c.fillRect(px - pr*.9, y0 + i*pr*.35 - pr*.06, pr*1.8, pr*.12); }
+        break;
+      }
+      case "galaxy": {
+        const gx = o.x*W;
+        c.save(); c.translate(gx, y0); c.rotate(t*.04 + o.x*3);
+        const core = c.createRadialGradient(0, 0, 0, 0, 0, 12*k); core.addColorStop(0, "rgba(255,240,220,.9)"); core.addColorStop(1, "rgba(200,170,255,0)");
+        c.fillStyle = core; c.beginPath(); c.arc(0, 0, 12*k, 0, 6.29); c.fill();
+        c.fillStyle = "rgba(220,205,255,.7)";
+        for (let i=0;i<70;i++){ const an = i*.28, rr = i*.55*k; for (const sgn of [1,-1]) c.fillRect(Math.cos(an)*rr*sgn, Math.sin(an)*rr*.45*sgn, 1.6, 1.6); }
+        c.restore(); break;
+      }
+      case "comet": {
+        const tail = c.createLinearGradient(x, y0, x + 140, y0 - 50);
+        tail.addColorStop(0, "rgba(190,230,255,.85)"); tail.addColorStop(1, "rgba(190,230,255,0)");
+        c.strokeStyle = tail; c.lineWidth = 3*k/2; c.beginPath(); c.moveTo(x, y0); c.lineTo(x + 140, y0 - 50); c.stroke();
+        c.fillStyle = "#FFFFFF"; c.fillRect(x - k, y0 - k, k*2, k*2); break;
+      }
+    }
+  }
+}
+
+function paintFlame(c, x, ny, sc, p, band, t){
+  if (p < .02) return;
+  const f = FLAME[band] || FLAME[2];
+  const len = (14 + 170*p) * sc * (.9 + .08*Math.sin(t*41) + .05*Math.sin(t*73));
+  const wid = (6 + 8*p) * sc;
+  c.globalCompositeOperation = "lighter";
+  const gr = c.createRadialGradient(x, ny + len*.25, 0, x, ny + len*.25, len*.95 + 20);
+  gr.addColorStop(0, f.glow + (.35 + .35*p) + ")"); gr.addColorStop(1, f.glow + "0)");
+  c.fillStyle = gr; c.beginPath(); c.arc(x, ny + len*.25, len*.95 + 20, 0, 6.29); c.fill();
+  const og = c.createLinearGradient(0, ny, 0, ny + len);
+  og.addColorStop(0, f.mid); og.addColorStop(1, f.glow + "0)");
+  c.fillStyle = og; c.beginPath(); c.moveTo(x - wid, ny);
+  c.quadraticCurveTo(x - wid*.7, ny + len*.55, x, ny + len); c.quadraticCurveTo(x + wid*.7, ny + len*.55, x + wid, ny); c.fill();
+  const cg = c.createLinearGradient(0, ny, 0, ny + len*.5);
+  cg.addColorStop(0, f.core); cg.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = cg; c.beginPath(); c.moveTo(x - wid*.45, ny);
+  c.quadraticCurveTo(x - wid*.3, ny + len*.3, x, ny + len*.5); c.quadraticCurveTo(x + wid*.3, ny + len*.3, x + wid*.45, ny); c.fill();
+  if (band >= 4 && p > .35){
+    c.fillStyle = "rgba(255,255,255,.55)";
+    for (let i=1;i<=3;i++){ c.beginPath(); c.ellipse(x, ny + len*(.16 + i*.15), wid*.32, wid*.18, 0, 0, 6.29); c.fill(); }
+  }
+  c.globalCompositeOperation = "source-over";
+}
+
+// Pixel-art rocket to match the rest of the sky. A pilot sits in the window, nav lights blink,
+// the nozzle glows when it fires, and the body sways at rest and stretches on big burns.
+const ROCKET = [
+  ".......K.......",
+  "......KOK......",
+  "......KOK......",
+  ".....KOYOK.....",
+  ".....KOYOK.....",
+  "....KOOYOOK....",
+  "....KOOYOOK....",
+  "....KoOOOoK....",
+  "...KKKKKKKKK...",
+  "...KWHWWWLDK...",
+  "...KWKKKKKDK...",
+  "...KWKHVVKDK...",
+  "...KWKgWWKDK...",
+  "...KWKgggKDK...",
+  "...KWKKKKKDK...",
+  "...KWHWWWLDK...",
+  "...KWHWWWLDK...",
+  "...KLLLLLLDK...",
+  "...KWHWWWLDK...",
+  "...KOOOOOOoK...",
+  "...KWHWWWLDK...",
+  "...KWHWWWLDK...",
+  "...KNLNLNLNK...",
+  "...KNNNNNNNK...",
+  "..KKWHWWWLDKK..",
+  ".KOKWHWWWLDKOK.",
+  "KOOKWHWWWLDKOOK",
+  "KROKWHWWWLDKOTK",
+  "KOOKWHWWWLDKOOK",
+  "KooKNNNNNNNKooK",
+  "KooKKKKKKKKKooK",
+  "....KmMMMmK....",
+  "...KmMMMMMmK..."
+];
+function paintRocket(c, x, y, sc, o){
+  o = o || {};
+  const t = o.t || 0, p = o.p || 0, u = 3;
+  const blink = Math.floor(t*2.2) % 2 === 0;
+  const pal = {
+    K:"#10162B", W:"#F2F5FF", H:"#FFFFFF", L:"#C9D0E6", D:"#8E97B5",
+    O:"#FF7A3D", o:"#C2401A", Y:"#FFB27A", N:"#1A2240",
+    V:"#5CE1FF", g:"#0E3A6E", G:"#3FB8E8",
+    R: blink ? "#FF4D6D" : "#5A1020", T: blink ? "#2A6B45" : "#3DFF8F",
+    M: p > .3 ? "#FFB066" : "#5A6386", m: p > .3 ? "#FF7A3D" : "#2A3150"
+  };
+  const sway = o.still ? 0 : Math.sin(t*1.3) * (.035 - .025*Math.min(1, p));
+  const sx = 1 - .05*p, sy = 1 + .08*p;
+  c.save(); c.translate(x, y + 9*sc); c.rotate(sway); c.scale(sc*sx, sc*sy);
+  const w = ROCKET[0].length, h = ROCKET.length, x0 = -w*u/2, y0 = -h*u;
+  for (let r=0;r<h;r++){ const row = ROCKET[r]; for (let col=0;col<w;col++){ const ch = row[col]; if (ch === ".") continue; c.fillStyle = pal[ch]; c.fillRect(x0 + col*u, y0 + r*u, u + .3, u + .3); } }
+  if (p > .3){ c.globalCompositeOperation = "lighter"; c.fillStyle = `rgba(255,170,80,${.35*p})`; c.fillRect(x0 + 4*u, y0 + 31*u, 7*u, 2*u); c.globalCompositeOperation = "source-over"; }
+  c.restore();
+}
+
+function startSpace(){
+  const cv = $("space"), ctx = cv.getContext("2d"), win = $("flightwin");
+  let W = 0, H = 0, dpr = 1, last = performance.now(), shownKm = -1, shownZone = -1;
+  const size = () => { dpr = Math.min(2, window.devicePixelRatio || 1); W = window.innerWidth; H = window.innerHeight; cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); };
+  size(); window.addEventListener("resize", size);
+
+  const STARS = Array.from({length:240}, () => ({x:Math.random(), y:Math.random(), r:Math.random()<.85 ? .6+Math.random()*.7 : 1.3+Math.random()*.8, l:Math.floor(Math.random()*3), p:Math.random()*6.28}));
+  const TREES = Array.from({length:26}, () => ({x:Math.random(), s:.8 + Math.random()*.6}));
+  const CLOUDS = Array.from({length:30}, (_,i) => ({a:6 + i*4.5 + Math.random()*3, x:Math.random(), s:.6 + Math.random()*1}));
+  const PAR = [.008, .022, .05], TPAR = [.12, .3, .65];
+  const STREAKS = Array.from({length:44}, () => ({x:Math.random(), y:Math.random(), v:.6 + Math.random()*.9}));
+  const PIX = '"Press Start 2P", monospace';
+  const off = document.createElement("canvas"), octx = off.getContext("2d", {willReadFrequently:true});
+
+  let R = {x:0, y:0, w:300, h:500, top:0, left:0, right:0, bottom:0}, ppp = 1.5, A = 0;
+  const yOf = a => R.y - (a - A) * ppp;
+  const rocketScale = () => clamp(R.w/170, .72, 1.2);
+
+  function skywrite(text, band, kind){
+    const fs = Math.round(clamp(R.w*.15, 22, 42));
+    octx.font = `${fs}px ${PIX}`;
+    const tw = Math.ceil(octx.measureText(text).width) + 4, th = fs + 6;
+    off.width = tw; off.height = th;
+    octx.font = `${fs}px ${PIX}`; octx.textBaseline = "top"; octx.fillStyle = "#fff";
+    octx.fillText(text, 2, 3);
+    const data = octx.getImageData(0,0,tw,th).data;
+    const step = Math.max(2, Math.round(fs/9));
+    const top = 22*rocketScale() + 34;
+    const col = kind === "miss" ? "#FF4D6D" : BAND_COL[band-1];
+    for (let y=0;y<th;y+=step) for (let x=0;x<tw;x+=step){
+      if (data[(y*tw + x)*4 + 3] < 120) continue;
+      spawn({k:"ink", x:x - tw/2 + (Math.random()-.5), a:A - (top + y)/ppp, vx:(Math.random()-.5)*6, vy:4+Math.random()*6,
+             s:step*.9, life:0, delay:(x/tw)*.35, max:3.6 + Math.random()*.5, col});
+    }
+  }
+
+  function frame(now){
+    const dt = Math.min(.05, (now-last)/1000); last = now;
+    const r = win.getBoundingClientRect();
+    R = {x:r.left + r.width/2, y:r.top + r.height*.7, w:r.width, h:r.height, top:r.top, left:r.left, right:r.right, bottom:r.bottom};
+    ppp = Math.max(2.6, r.height/115);
+
+    if (FX.dur > 0){
+      const k = clamp((now - FX.t0)/(FX.dur*1000), 0, 1);
+      const e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k+2, 2)/2;
+      FX.alt = FX.from + (FX.to - FX.from) * e;
+      if (k >= 1) FX.dur = 0;
+    }
+    A = FX.alt;
+    const zi = zoneIdx(A);
+    if (zi > FX.lastZone){ FX.lastZone = zi; if (S.phase !== "idle") SFX.zone(); }
+    if (S.round > 0 && S.phase !== "over" && S.prevBest > 0 && !S.recordHit && A > S.prevBest){
+      S.recordHit = true; banner("NEW RECORD", "You just passed your best flight", "record"); SFX.best();
+    }
+
+    while (FX.pending.length){ const p = FX.pending.shift(); skywrite(p.text, p.band, p.kind); if (p.kind === "miss") missPuff(); }
+
+    let pw = 0;
+    if (now < FX.burnEnd){
+      const k = (now - FX.burnStart)/(FX.burnEnd - FX.burnStart);
+      pw = FX.power * Math.min(1, k/.08) * (k > .72 ? (1-k)/.28 : 1);
+    }
+    const flying = S.round > 0 && S.phase !== "over" && S.phase !== "idle";
+    const idleP = flying ? .1 : 0;
+    const p = Math.max(pw, idleP);
+    const band = pw > idleP ? FX.band : 2;
+    FX.misfire = Math.max(0, FX.misfire - dt*1.4);
+    // Sense of speed: the scenery streaks past while the altitude gain stays the same.
+    if (!reduceMotion){
+      FX.travel += pw * 1500 * dt;
+      FX.lift += (pw * Math.min(R.h*.16, 130) - FX.lift) * Math.min(1, dt*2.5);
+      let n = pw * 46 * dt;
+      while (n > 0){ if (Math.random() < n) FX.wisps.push({x:R.x + (Math.random()-.5)*Math.max(R.w*1.6, 300), y:-40 - Math.random()*80, v:700 + 1100*pw*Math.random() + 500*pw, r:8 + Math.random()*26, life:0, dust:A > 260}); n--; }
+    }
+    for (let i=FX.wisps.length-1;i>=0;i--){ const w = FX.wisps[i]; w.life += dt; w.y += w.v*dt; if (w.y > H + 80) FX.wisps.splice(i,1); }
+    for (let i=FX.rings.length-1;i>=0;i--){ const g = FX.rings[i]; g.t += dt; if (g.t > 1.1) FX.rings.splice(i,1); }
+
+    emit(dt, p, band, pw > idleP);
+    step(dt);
+    draw(now/1000, p, band);
+
+    const kmNow = Math.round(A*KM);
+    if (kmNow !== shownKm){ shownKm = kmNow; const s = kmNow.toLocaleString(); $("altKm").textContent = s + " KM"; }
+    if (zi !== shownZone){ shownZone = zi; $("altZone").textContent = ZONES[zi].name.toUpperCase(); }
+    if (document.hidden) setTimeout(() => requestAnimationFrame(frame), 300); else requestAnimationFrame(frame);
+  }
+
+  function missPuff(){
+    const sc = rocketScale();
+    for (let i=0;i<34;i++) spawn({k:"smoke", x:(Math.random()-.5)*30*sc, a:A - 6/ppp, vx:(Math.random()-.5)*90, vy:-20 + Math.random()*90,
+      r:5+Math.random()*6, gr:22, life:0, max:1.2+Math.random()*1.1, col:"40,40,52", al:.7});
+  }
+
+  function emit(dt, p, band, burning){
+    if (p <= 0 || reduceMotion) return;
+    const f = FLAME[band] || FLAME[2], sc = rocketScale();
+    let n = (burning ? 50 + 260*p : 14)*dt;
+    const up = (FX.lift || 0)/ppp;
+    while (n > 0){ if (Math.random() < n) spawn({k:"smoke", x:(Math.random()-.5)*10*sc, a:A + up - (8*sc + 20*p*sc)/ppp,
+      vx:(Math.random()-.5)*(30 + 80*p), vy:70 + Math.random()*(90 + 220*p), r:(3 + Math.random()*3)*sc, gr:(12 + 30*p)*sc, life:0,
+      max:1.2 + Math.random()*(1 + 1.6*p), col:f.smoke, al:.16 + .26*p}); n--; }
+    if (burning){ let m = (40 + 260*p)*dt; while (m > 0){ if (Math.random() < m) spawn({k:"spark", x:(Math.random()-.5)*8*sc, a:A - 6*sc/ppp,
+      vx:(Math.random()-.5)*120, vy:240 + Math.random()*420*p, r:1 + Math.random()*1.6, life:0, max:.18 + Math.random()*.32, col:f.spark}); m--; } }
+  }
+
+  function step(dt){
+    for (let i=P.length-1;i>=0;i--){
+      const q = P[i]; q.life += dt;
+      if (q.life > (q.delay||0) + q.max){ P.splice(i,1); continue; }
+      if (q.k === "ink"){
+        const t = q.life - q.delay; if (t < 0) continue;
+        if (t > q.max - 1.2){ q.x += q.vx*dt*3; q.a += q.vy*dt/ppp; q.s *= 1 + dt*.25; }
+        continue;
+      }
+      const drag = q.k === "spark" ? 1.5 : 2.2;
+      q.vx *= Math.max(0, 1 - drag*dt); q.vy *= Math.max(0, 1 - drag*dt);
+      q.x += q.vx*dt; q.a -= q.vy*dt/ppp;
+      if (q.k === "smoke") q.r += q.gr*dt*(1 - q.life/q.max*.5);
+    }
+  }
+
+  function draw(t, p, band){
+    const c = ctx;
+    c.setTransform(dpr,0,0,dpr,0,0);
+    let sx = 0, sy = 0;
+    if (!reduceMotion){
+      const sh = FX.misfire*5 + (p > .5 ? (p - .5)*4 : 0);
+      if (sh > .2){ sx = (Math.random()-.5)*sh; sy = (Math.random()-.5)*sh; }
+    }
+    c.translate(sx, sy);
+
+    // sky: a long, slow gradient from light blue at the ground to black space
+    const aTop = A + R.y/ppp, aBot = A - (H - R.y)/ppp;
+    const g = c.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, rgb(skyRGB(A + (aTop - A)*.45)));
+    g.addColorStop(clamp(R.y/H, .05, .95), rgb(skyRGB(A)));
+    g.addColorStop(1, rgb(skyRGB(A - (A - aBot)*.45)));
+    c.fillStyle = g; c.fillRect(-10,-10,W+20,H+20);
+
+    const neb = clamp((A - 650)/400, 0, 1);
+    if (neb > 0){
+      [[.2,.3,"170,80,255"],[.78,.62,"60,140,255"],[.55,.15,"255,90,170"]].forEach(([nx,ny,col]) => {
+        const cy = ((ny*H + A*ppp*.02) % (H*1.4)) - H*.2, rr = Math.max(W,H)*.45;
+        const ng = c.createRadialGradient(nx*W, cy, 0, nx*W, cy, rr);
+        ng.addColorStop(0, `rgba(${col},${.16*neb})`); ng.addColorStop(1, `rgba(${col},0)`);
+        c.fillStyle = ng; c.fillRect(0,0,W,H);
+      });
+    }
+
+    const starA = clamp((A - 170)/230, 0, 1);
+    if (starA > 0){
+      for (const s of STARS){
+        const y = ((s.y*H + A*ppp*PAR[s.l] + FX.travel*TPAR[s.l]) % H + H) % H;
+        c.globalAlpha = starA * (.55 + .45*Math.sin(t*(1.4 + s.l) + s.p));
+        c.fillStyle = s.p > 4 ? "#CFE0FF" : "#FFFFFF";
+        const rr = s.r * (s.l === 2 ? 1.2 : 1);
+        c.fillRect(s.x*W - rr/2, y - rr/2, rr, rr);
+      }
+      c.globalAlpha = 1;
+    }
+
+    const limb = clamp((A - 230)/90, 0, 1) * clamp((820 - A)/200, 0, 1);
+    if (limb > 0){
+      const ER = Math.max(W, H)*1.6, ly = H - 60 + Math.max(0, A - 280)*ppp*.02;
+      c.globalAlpha = limb;
+      const eg = c.createRadialGradient(W/2, ly + ER, ER*.96, W/2, ly + ER, ER*1.03);
+      eg.addColorStop(0, "rgba(40,110,220,0)"); eg.addColorStop(.55, "rgba(90,175,255,.6)"); eg.addColorStop(1, "rgba(90,175,255,0)");
+      c.fillStyle = eg; c.fillRect(0, ly - 60, W, H - ly + 60);
+      c.fillStyle = "#123A7A"; c.beginPath(); c.arc(W/2, ly + ER, ER, 0, 6.29); c.fill();
+      c.globalAlpha = 1;
+    }
+
+    { const y = yOf(520), mr = clamp(R.w*.2, 34, 70), mx = R.x + R.w*.32;
+      if (y > -mr*2 && y < H + mr*2){
+        const mg = c.createRadialGradient(mx, y, mr*.8, mx, y, mr*1.8); mg.addColorStop(0,"rgba(230,226,210,.18)"); mg.addColorStop(1,"rgba(230,226,210,0)");
+        c.fillStyle = mg; c.beginPath(); c.arc(mx, y, mr*1.8, 0, 6.29); c.fill();
+        c.fillStyle = "#DCD8CC"; c.beginPath(); c.arc(mx, y, mr, 0, 6.29); c.fill();
+        c.fillStyle = "#B9B4A6";
+        [[-.3,-.2,.22],[.25,.15,.16],[-.05,.38,.12],[.35,-.35,.09]].forEach(([dx,dy,rr]) => { c.beginPath(); c.arc(mx+dx*mr, y+dy*mr, rr*mr, 0, 6.29); c.fill(); });
+      } }
+
+    { const y = yOf(1150), pr = clamp(R.w*.16, 28, 56), px = R.x - R.w*.3;
+      if (y > -pr*3 && y < H + pr*3){
+        c.save(); c.translate(px, y); c.rotate(-.35);
+        c.strokeStyle = "rgba(255,209,102,.55)"; c.lineWidth = 3; c.beginPath(); c.ellipse(0,0,pr*2,pr*.5,0,Math.PI,2*Math.PI); c.stroke();
+        const pg = c.createLinearGradient(-pr,-pr,pr,pr); pg.addColorStop(0,"#C77DFF"); pg.addColorStop(1,"#4B2A8A");
+        c.fillStyle = pg; c.beginPath(); c.arc(0,0,pr,0,6.29); c.fill();
+        c.beginPath(); c.ellipse(0,0,pr*2,pr*.5,0,0,Math.PI); c.stroke();
+        c.restore();
+      } }
+
+    // daytime clouds
+    for (const cl of CLOUDS){
+      const y = yOf(cl.a); if (y < -60 || y > H + 60) continue;
+      const cx = (((cl.x*W + t*4*cl.s) % (W + 300)) + W + 300) % (W + 300) - 150, s = cl.s * clamp(W/900, .7, 1.4);
+      c.fillStyle = "rgba(255,255,255,.88)";
+      c.beginPath();
+      c.ellipse(cx, y, 70*s, 16*s, 0, 0, 6.29);
+      c.ellipse(cx-40*s, y+5*s, 44*s, 12*s, 0, 0, 6.29);
+      c.ellipse(cx+36*s, y-7*s, 40*s, 17*s, 0, 0, 6.29);
+      c.fill();
+      c.fillStyle = "rgba(190,210,235,.6)";
+      c.beginPath(); c.ellipse(cx, y+9*s, 64*s, 6*s, 0, 0, 6.29); c.fill();
+    }
+
+    const k = clamp(Math.min(W, 1400)/420, 2, 3.4);
+    drawCreatures(c, t, W, H, yOf, k);
+    { const sp = clamp((FX.lift || 0) / 90, 0, 1);
+      if (sp > .03){
+        c.fillStyle = "#FFFFFF";
+        for (const s of STREAKS){
+          const len = 30 + 260*sp*s.v, y = ((s.y*(H + len) + FX.travel*s.v) % (H + len)) - len;
+          c.globalAlpha = (.06 + .3*sp) * s.v; c.fillRect(s.x*W, y, 1.5, len);
+        }
+        c.globalAlpha = 1;
+      }
+      for (const w of FX.wisps){
+        if (w.dust){ c.globalAlpha = .7; c.fillStyle = "#DDE6FF"; c.fillRect(w.x, w.y, 2, 10 + w.v*.02); }
+        else { c.globalAlpha = .55; c.fillStyle = "#FFFFFF"; c.beginPath(); c.ellipse(w.x, w.y, w.r*1.6, w.r*.7, 0, 0, 6.29); c.fill(); }
+      }
+      c.globalAlpha = 1; }
+
+    // ground: hills, trees, pad and tower
+    const gy = yOf(0) + 2;
+    if (gy < H + 60){
+      c.fillStyle = "#5E9A74"; c.beginPath(); c.moveTo(0, gy);
+      for (let x=0;x<=W+20;x+=20) c.lineTo(x, gy - 16 - 12*Math.sin(x*.011) - 7*Math.sin(x*.029));
+      c.lineTo(W, gy); c.closePath(); c.fill();
+      c.fillStyle = "#3F7A4E"; c.fillRect(0, gy, W, H - gy + 20);
+      c.fillStyle = "#336742"; c.fillRect(0, gy + 22, W, H - gy);
+      for (const tr of TREES){ const tx = tr.x*W; if (Math.abs(tx - R.x) < 70) continue; sprite(c, SPR.tree, PAL.tree, tx, gy - 6*tr.s, k*tr.s, false); }
+      const sc = rocketScale();
+      c.fillStyle = "#4A5168"; c.fillRect(R.x - 34*sc, gy - 3, 68*sc, 5);
+      c.strokeStyle = "#3A4360"; c.lineWidth = 2;
+      const tx = R.x - 30*sc;
+      c.beginPath(); c.moveTo(tx, gy); c.lineTo(tx, gy - 96*sc); c.stroke();
+      for (let i=1;i<8;i++){ c.beginPath(); c.moveTo(tx-6, gy-i*12*sc); c.lineTo(tx+6, gy-i*12*sc+6); c.stroke(); }
+      c.fillStyle = (Math.sin(t*3) > 0) ? "#FF4D6D" : "#7A1A2C"; c.fillRect(tx-2, gy-100*sc, 4, 4);
+      c.lineWidth = 1;
+    }
+
+    // zone markers inside the flight window, dark on light sky and cyan on dark sky
+    c.font = `8px ${PIX}`;
+    for (const z of ZONES.slice(1)){
+      const y = yOf(z.a); if (y < R.top + 90 || y > R.bottom) continue;
+      const light = lum(skyRGB(z.a)) > .38;
+      c.strokeStyle = light ? "rgba(8,24,60,.35)" : "rgba(92,225,255,.28)"; c.setLineDash([3,5]);
+      c.beginPath(); c.moveTo(R.left, y); c.lineTo(R.right, y); c.stroke(); c.setLineDash([]);
+      if (R.w >= 130){ c.fillStyle = light ? "rgba(8,24,60,.85)" : "rgba(92,225,255,.8)"; c.fillText(`${z.name.toUpperCase()} ${(z.a*KM).toLocaleString()}KM`, R.left + 8, y - 6); }
+    }
+
+    // your best and the top flight, as lines to chase
+    const marks = [];
+    if (S.prevBest > 0) marks.push({a:S.prevBest, label:"YOUR BEST " + km(S.prevBest) + "KM", col:"#FFD166"});
+    const tb = topBest(); if (tb > 0 && tb > S.prevBest) marks.push({a:tb, label:"TOP FLIGHT " + km(tb) + "KM", col:"#FF7AB8"});
+    for (const m of marks){
+      const y = yOf(m.a); if (y < R.top + 40 || y > R.bottom) continue;
+      c.strokeStyle = m.col; c.lineWidth = 2; c.setLineDash([10,6]);
+      c.beginPath(); c.moveTo(R.left, y); c.lineTo(R.right, y); c.stroke(); c.setLineDash([]); c.lineWidth = 1;
+      const tw = c.measureText(m.label).width;
+      c.fillStyle = "rgba(4,8,24,.75)"; c.fillRect(R.right - tw - 14, y - 16, tw + 10, 13);
+      c.fillStyle = m.col; c.fillText(m.label, R.right - tw - 9, y - 6);
+    }
+
+    // smoke + skywritten score
+    for (const q of P){
+      if (q.k === "spark") continue;
+      const y = yOf(q.a), x = R.x + q.x;
+      if (y < -40 || y > H + 40) continue;
+      if (q.k === "ink"){
+        const tt = q.life - q.delay; if (tt < 0) continue;
+        c.globalAlpha = Math.min(1, tt/.12) * (tt > q.max - 1.2 ? Math.max(0, (q.max - tt)/1.2) : 1);
+        c.fillStyle = "rgba(6,12,34,.55)"; c.fillRect(x - q.s/2 + 1.5, y - q.s/2 + 1.5, q.s, q.s);
+        c.fillStyle = q.col; c.fillRect(x - q.s/2, y - q.s/2, q.s, q.s);
+      } else {
+        const kk = q.life/q.max;
+        c.globalAlpha = q.al * (kk < .1 ? kk/.1 : 1 - (kk - .1)/.9);
+        c.fillStyle = `rgb(${q.col})`;
+        c.beginPath(); c.arc(x, y, q.r, 0, 6.29); c.fill();
+      }
+    }
+    c.globalAlpha = 1;
+
+    const bob = S.phase === "idle" ? 0 : Math.sin(performance.now()/420)*2;
+    const rx = R.x + (FX.misfire ? Math.sin(performance.now()/14)*3*FX.misfire : 0), ry = R.y + bob - (FX.lift || 0), sc = rocketScale();
+    for (const g of FX.rings){
+      if (g.t < 0) continue;
+      const k2 = g.t/1.1, rr = (20 + (90 + 240*g.big)*k2) * sc;
+      c.strokeStyle = `rgba(255,255,255,${(1 - k2)*.75})`; c.lineWidth = (2 + 5*g.big)*(1 - k2);
+      c.beginPath(); c.ellipse(rx, ry + 8*sc, rr, rr*.35, 0, 0, 6.29); c.stroke();
+    }
+    c.lineWidth = 1;
+    if (p > .6){
+      const va = (p - .6)/.4;
+      c.fillStyle = `rgba(255,255,255,${.18*va})`; c.strokeStyle = `rgba(255,255,255,${.55*va})`;
+      c.beginPath(); c.moveTo(rx - 36*sc, ry + 4*sc); c.quadraticCurveTo(rx, ry - 150*sc, rx + 36*sc, ry + 4*sc); c.closePath(); c.fill(); c.stroke();
+    }
+    paintFlame(c, rx, ry + 9*sc, sc, p, band, t);
+    c.globalCompositeOperation = "lighter";
+    for (const q of P){ if (q.k !== "spark") continue; c.globalAlpha = 1 - q.life/q.max; c.fillStyle = q.col; c.fillRect(R.x + q.x, yOf(q.a) - (FX.lift || 0), q.r*1.4, q.r*1.4); }
+    c.globalAlpha = 1; c.globalCompositeOperation = "source-over";
+    paintRocket(c, rx, ry, sc, {t, p, still: S.phase === "idle"});
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- between-round launch screen ----------
+const SPEED = Array.from({length:46}, () => ({x:Math.random(), y:Math.random(), v:.6 + Math.random()*.9, w:Math.random() < .2 ? 2 : 1}));
+function playTransit(round){
+  return new Promise(resolve => {
+    const ov = $("transit"), cv = $("tcanvas"), c = cv.getContext("2d");
+    const next = S.queue[0];
+    $("trRound").textContent = "ROUND " + round;
+    $("trNext").textContent = next ? "Next up: " + (next.category || "Mixed") : "Fueling up with fresh prompts…";
+    $("trAlt").textContent = km(S.score) + " KM · " + ZONES[zoneIdx(S.score)].name.toUpperCase();
+    const eng = $("trEng"); eng.replaceChildren();
+    for (let i=0;i<LIVES;i++) eng.append(el("span",{class:"engine"+(i<S.lives?" on":""),"aria-hidden":"true"}));
+    eng.setAttribute("aria-label", S.lives + " lives left");
+    if (S.mode === "daily"){ eng.replaceChildren(el("span",{class:"lnum",text:`Round ${round} of ${DAILY_N}`})); eng.setAttribute("aria-label", `Round ${round} of ${DAILY_N}`); }
+    $("trCount").textContent = "";
+    ov.hidden = false; requestAnimationFrame(() => ov.classList.add("show"));
+    const GO = reduceMotion ? 1.0 : 1.95, END = reduceMotion ? 1.5 : 3.15, beat = GO/3;
+    const parts = [];
+    let done = false, t0 = performance.now(), last = t0, shown = "";
+    const onKey = e => { if (e.key === "Enter" || e.key === " " || e.key === "Escape"){ e.preventDefault(); finish(); } };
+    function finish(){
+      if (done) return; done = true;
+      document.removeEventListener("keydown", onKey);
+      ov.classList.remove("show");
+      setTimeout(() => { ov.hidden = true; resolve(); }, 260);
+    }
+    document.addEventListener("keydown", onKey);
+    $("trSkip").onclick = () => { SFX.click(); finish(); };
+    $("trSkip").focus();
+
+    function frame(now){
+      if (done) return;
+      const t = (now - t0)/1000, dt = Math.min(.05, (now - last)/1000); last = now;
+      const dpr = Math.min(2, window.devicePixelRatio || 1), W = cv.clientWidth, H = cv.clientHeight;
+      if (cv.width !== Math.round(W*dpr) || cv.height !== Math.round(H*dpr)){ cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); }
+      c.setTransform(dpr,0,0,dpr,0,0);
+
+      const label = t < beat ? "3" : t < beat*2 ? "2" : t < GO ? "1" : "GO!";
+      if (label !== shown){ shown = label; $("trCount").textContent = label; if (label === "GO!") SFX.launch(); else SFX.tick(label === "1"); }
+
+      const lift = Math.max(0, t - GO), A = S.score + lift*70;
+      const g = c.createLinearGradient(0,0,0,H);
+      g.addColorStop(0, rgb(skyRGB(A + 180))); g.addColorStop(1, rgb(skyRGB(A)));
+      c.fillStyle = g; c.fillRect(0,0,W,H);
+
+      const starA = clamp((A - 170)/230, 0, 1);
+      const streak = lift > 0 ? Math.min(1, lift*1.6) : 0;
+      for (const s of SPEED){
+        const len = 2 + 170*streak*s.v;
+        const y = ((s.y*H + lift*1500*s.v) % (H + len)) - len;
+        c.globalAlpha = lift > 0 ? .25 + .45*s.v : starA*.8;
+        c.fillStyle = starA > .4 ? "#FFFFFF" : "rgba(255,255,255,.85)";
+        c.fillRect(s.x*W, y, s.w, len);
+      }
+      c.globalAlpha = 1;
+
+      const sc = clamp(Math.min(W, H)/340, 1, 1.9);
+      const shake = reduceMotion ? 0 : (t < GO ? (t/GO)*3 : 1.6);
+      const rise = lift > 0 ? Math.pow(Math.min(1, lift/1.15), 2.1) * H*.95 : 0;
+      const rx = W/2 + (Math.random()-.5)*shake, ry = H*.68 - rise + (Math.random()-.5)*shake;
+
+      // launch pad + ground only on the first launch
+      if (S.score === 0){
+        const gy = H*.68 + 8*sc + rise*.15;
+        c.fillStyle = "#3F7A4E"; c.fillRect(0, gy, W, H - gy);
+        c.fillStyle = "#4A5168"; c.fillRect(W/2 - 40*sc, gy - 4, 80*sc, 6);
+      }
+
+      if (!reduceMotion){
+        const n = (t < GO ? 70 : 200)*dt;
+        for (let i=0;i<Math.ceil(n);i++) if (Math.random() < n - i) parts.push({x:rx + (Math.random()-.5)*20*sc, y:ry + 12*sc,
+          vx:(Math.random()-.5)*(t < GO ? 320 : 140), vy:t < GO ? Math.random()*50 : 220 + Math.random()*260, r:6*sc, life:0, max:1.1 + Math.random()*.9});
+        for (let i=parts.length-1;i>=0;i--){
+          const q = parts[i]; q.life += dt; if (q.life > q.max){ parts.splice(i,1); continue; }
+          q.x += q.vx*dt; q.y += q.vy*dt; q.vx *= 1 - 1.4*dt; q.vy *= 1 - .8*dt; q.r += 30*sc*dt;
+          c.globalAlpha = .5*(1 - q.life/q.max); c.fillStyle = "rgb(228,231,240)";
+          c.beginPath(); c.arc(q.x, q.y, q.r, 0, 6.29); c.fill();
+        }
+        c.globalAlpha = 1;
+      }
+
+      const p = t < GO ? .1 + .25*(t/GO) + .06*Math.sin(t*30) : 1;
+      paintFlame(c, rx, ry + 9*sc, sc, p, t < GO ? 2 : 4, t);
+      paintRocket(c, rx, ry, sc, {t, p, still: S.phase === "idle"});
+
+      if (t >= END) finish(); else requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+// Between rounds: launch screen, then the next prompt.
+function goNext(){
+  if (runOver()) return endRun();
+  S.phase = "transit"; renderAll();
+  if (S.queue[0]) prepList(S.queue[0]);
+  const fuel = S.queue.length ? Promise.resolve() : refill(true);
+  fuel.then(() => { const n = S.queue[0]; if (n && !$("transit").hidden) $("trNext").textContent = "Next up: " + (n.category || "Mixed"); });
+  Promise.all([playTransit(S.round + 1), fuel]).then(nextRound);
+}
+
+// ---------- rendering ----------
+// Pages: lobby (waiting), play (only the game), results, leaderboard, stats, how.
+let wasFocus = false;
+function go(page){
+  if (S.page === page) return;
+  SFX.click();
+  if (S.phase === "over" && page !== "results"){ S.phase = "idle"; FX.reset(); }
+  S.page = page;
+  try { if (["lobby","leaderboard","stats","how"].includes(page)) history.replaceState(null, "", "#" + page); } catch(e){}
+  renderAll();
+}
+function renderAll(){
+  const f = S.page === "play";
+  document.body.className = "page-" + S.page + (f ? " focus" : "");
+  if (f !== wasFocus) window.scrollTo(0, 0);
+  wasFocus = f;
+  renderNav(); renderPane(); renderSide(); renderAir(); renderSum();
+}
+function renderNav(){
+  document.querySelectorAll(".pages button").forEach(b => { if (b.dataset.page === S.page) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current"); });
+}
+
+function myStats(){
+  const empty = {best:0,total:0,runs:0,jackpots:0,bestPick:0,bestCombo:0,badges:[],recent:[],daily:null,dailyStreak:0,lastDaily:null};
+  if (myDoc) return myDoc;
+  const local = localStats();
+  return local.runs ? local : empty;
+}
+const topBest = () => (LB.best && LB.best[0] ? LB.best[0].v : 0);
+const earnedBadges = () => new Set([...(myStats().badges || []), ...S.runBadges]);
+
+function engines(n){
+  const w = el("span",{class:"engines","aria-hidden":"true"});
+  for (let i=0;i<LIVES;i++) w.append(el("span",{class:"engine"+(i<n?" on":"")}));
+  return w;
+}
+const livesText = n => n === 1 ? "1 life left" : n + " lives left";
+
+function paintTimer(){
+  const t = $("timer"); if (!t) return;
+  const paused = S.phase === "judging" || Date.now() < (S.pauseUntil || 0);
+  t.firstChild.style.transform = `scaleX(${S.left/SECS})`;
+  t.classList.toggle("low", S.left < 6 && !paused);
+  t.classList.toggle("paused", paused);
+  const c = $("secs");
+  if (c){ c.textContent = paused ? "PAUSED " + Math.ceil(S.left) + "s" : Math.ceil(S.left) + "s"; c.classList.toggle("low", S.left < 6 && !paused); c.classList.toggle("paused", paused); }
+}
+
+function tierChip(v){
+  if (!v.valid) return el("span",{class:"chip bad",text: v.timeout ? "NO ANSWER" : v.error ? "NO SCORE" : "MISS"});
+  return el("span",{class:"chip t"+v.tier,text:BANDS[v.tier-1].name.toUpperCase()});
+}
+
+function scaleBar(score, compact){
+  const w = el("div",{class:"scale" + (compact ? " compact" : ""), role:"img", "aria-label": score != null ? `Scored ${score} out of 100` : "Points from 1 to 100, Basic to Ultra niche"});
+  const track = el("div",{class:"track"});
+  BANDS.forEach((b,i) => { const end = i < 5 ? BANDS[i+1].min : 101; track.append(el("div",{class:"seg t"+(i+1), style:`flex:${end - b.min}`}, el("span",{text:TIER_SHORT[i]}))); });
+  w.append(track);
+  if (score != null) w.append(el("div",{class:"marker", style:`left:${clamp(score,1,100)}%`}, el("b",{text:String(score)})));
+  if (!compact) w.append(el("div",{class:"ticks"}, ...[1,16,36,56,76,91,100].map(n => el("span",{class: n === 1 ? "first" : n === 100 ? "last" : "", style:`left:${n}%`, text:String(n)}))));
+  return w;
+}
+
+function renderLog(limit, title){
+  if (!S.log.length) return null;
+  const box = el("div",{class:"logbox"});
+  if (title) box.append(el("div",{class:"label",text:title}));
+  const ul = el("ul",{class:"log","aria-label":"Round history"});
+  for (const r of S.log.slice(0, limit || 8)){
+    ul.append(el("li",null,
+      el("span",{class:"n",text:"R"+r.n}),
+      el("span",{class:"q"}, document.createTextNode(r.prompt + "  "), el("small",{text: r.v.answer ? "· " + (r.v.valid ? r.v.canonical : r.v.answer) : "· no answer"})),
+      tierChip(r.v),
+      el("span",{class:"p",text:(r.v.pts ? "+" + r.v.pts : "0")})
+    ));
+  }
+  box.append(ul);
+  return box;
+}
+
+function modeLine(){
+  const p = el("p",{class:"mode"});
+  if (S.notice) { p.textContent = S.notice; return p; }
+  if (online) p.append("Judge: ", el("b",{text:"Claude"}), ", and it's strict. Fresh prompts every flight. Every score is checked on the server.");
+  else p.append("Judge: ", el("b",{text:"offline list"}), ". The server can't be reached, so flights use the built-in prompts and stay on this device.");
+  return p;
+}
+
+function tile(label, value, sub, cls){
+  return el("div",{class:"tile" + (cls ? " " + cls : "")}, el("div",{class:"label",text:label}), value, sub ? el("div",{class:"sub",text:sub}) : null);
+}
+function goalBar(text, frac, cls){
+  return el("div",{class:"goal" + (cls ? " " + cls : "")}, el("p",null, ...text), el("div",{class:"bar"}, el("i",{style:`width:${Math.round(clamp(frac,0,1)*100)}%`})));
+}
+function goals(){
+  const out = [];
+  const zi = zoneIdx(S.score), nz = ZONES[zi+1];
+  if (nz) out.push(goalBar([document.createTextNode("Next: "), el("b",{text:nz.name}), document.createTextNode(` · ${km(nz.a - S.score)} km to go`)], (S.score - ZONES[zi].a)/(nz.a - ZONES[zi].a)));
+  else out.push(goalBar([el("b",{text:"Deep space reached."}), document.createTextNode(" Keep climbing.")], 1));
+  if (S.prevBest > 0){
+    if (S.score > S.prevBest) out.push(goalBar([el("b",{text:"New personal best"}), document.createTextNode(` by ${km(S.score - S.prevBest)} km`)], 1, "best"));
+    else out.push(goalBar([document.createTextNode("Your best: "), el("b",{text:km(S.prevBest) + " km"}), document.createTextNode(` · ${km(S.prevBest - S.score)} km to beat it`)], S.score / S.prevBest, "best"));
+  }
+  const kind = S.mode === "daily" ? "today" : "best";
+  const others = rowsFor(kind).filter(r => r.id !== uid).map(r => r.v);
+  if (others.length){
+    const rank = others.filter(v => v > S.score).length + 1;
+    out.push(el("p",{class:"vnote"}, document.createTextNode(S.mode === "daily" ? "On today's board you'd be " : "On the leaderboard you'd be "), el("b",{text:"#" + rank}), document.createTextNode(` of ${others.length + 1} right now.`)));
+  }
+  return out;
+}
+
+function roundSummary(){
+  const v = S.verdict, c = S.current, daily = S.mode === "daily";
+  const w = el("div",{class:"summary"});
+  w.append(el("div",{class:"sum-head"}, el("span",{class:"label",text: daily ? `Round ${S.round} of ${DAILY_N} complete` : "Round " + S.round + " complete"}), el("span",{class:"cat",text:c.category || "Mixed"})));
+  w.append(el("p",{class:"sum-prompt",text:c.prompt}));
+  w.append(el("div",{class:"sum-hero" + (!v.valid ? " bad" : v.tier === 6 ? " top" : "")},
+    el("div",{class:"sum-ans"}, el("div",{class:"label",text:"Your answer"}), el("div",{class:"vans",text: v.answer ? (v.valid ? v.canonical : v.answer) : "No answer"}), tierChip(v)),
+    el("div",{class:"sum-score"}, el("div",{class:"big-pts",text: v.valid ? String(v.score) : "0"}), el("div",{class:"label",text:"out of 100"}))));
+  if (v.note) w.append(el("p",{class:"vnote",text:v.note}));
+  w.append(scaleBar(v.valid ? v.score : null));
+  if (v.valid){
+    const bd = el("div",{class:"breakdown"});
+    bd.append(el("div",{class:"brow"}, el("span",{text:"Answer"}), el("b",{text:v.score + " pts"})));
+    if (v.bonus) bd.append(el("div",{class:"brow combo"}, el("span",{text:`Combo x${v.combo} bonus`}), el("b",{text:"+" + v.bonus + " pts"})));
+    bd.append(el("div",{class:"brow total"}, el("span",{text:"This round"}), el("b",{text:`${v.pts} pts = +${km(v.pts)} km`})));
+    w.append(bd);
+  } else if (!v.error){
+    w.append(el("p",{class:"sum-miss",text: daily ? (v.timeout ? "No answer in time. No points this round." : "That doesn't fit the category. No points this round.") : (v.timeout ? "No answer in time. You lost a life." : "That doesn't fit the category. You lost a life.")}));
+  }
+  w.append(el("div",{class:"tiles"},
+    daily ? tile("Rounds left", el("div",{class:"v",text:String(DAILY_N - S.round)}), "of " + DAILY_N)
+          : tile("Lives", el("div",{class:"v"}, engines(S.lives)), v.repaired ? "Repaired! " + livesText(S.lives) : livesText(S.lives), S.lives === 1 ? "last" : ""),
+    tile("Combo", el("div",{class:"v",text: S.combo >= 2 ? "x" + S.combo : S.combo === 1 ? "x1" : "–"}), S.combo >= 1 ? "Next 56+ adds +" + Math.min(30, S.combo*10) : "Score 56+ to start one"),
+    tile("Altitude", el("div",{class:"v",text: km(S.score)}), "km · " + ZONES[zoneIdx(S.score)].name)
+  ));
+  w.append(el("div",{class:"goals"}, ...goals()));
+  if (v.common && v.common.length){
+    const p = el("p",{class:"vnote"}); p.append("Most people said: ", el("b",{text:v.common.join(", ")}));
+    if (v.rare) p.append(". An Ultra niche pick: ", el("b",{text:v.rare}));
+    w.append(p);
+  }
+  w.append(el("button",{class:"btn primary big",type:"button",id:"nextBtn",text: runOver() ? "SEE RESULTS" : "NEXT ROUND", onclick:() => { SFX.click(); goNext(); }}));
+  return w;
+}
+
+function copyButton(){
+  const b = el("button",{class:"btn ghost",type:"button",text:"COPY RESULT"});
+  b.addEventListener("click", () => {
+    const text = shareText();
+    const fallback = () => { const ta = $("shareText"); if (ta){ ta.hidden = false; ta.value = text; ta.focus(); ta.select(); } b.textContent = "SELECT AND COPY"; };
+    try { navigator.clipboard.writeText(text).then(() => { b.textContent = "COPIED"; SFX.click(); }, fallback); } catch(e){ fallback(); }
+  });
+  return b;
+}
+
+function flightSummary(){
+  const w = el("div",{class:"summary"}), daily = S.mode === "daily";
+  const valid = S.log.filter(r => r.v.valid);
+  const avg = valid.length ? Math.round(valid.reduce((s,r) => s + r.v.score, 0) / valid.length) : 0;
+  const title = daily ? "Daily flight · " + prettyDate(todayKey()) : "Unlimited flight";
+  w.append(el("div",{class:"sum-head"}, el("span",{class:"label",text:title + " · over"}), el("span",{class:"cat",text:S.round + " rounds"})));
+  w.append(el("div",{class:"over-score"}, document.createTextNode(km(S.score)), el("small",{text:"KM"})));
+  w.append(el("p",{class:"sum-zone",text:"You reached " + ZONES[zoneIdx(S.score)].name + "."}));
+  w.append(gridBlocks(shareGrid()), gridLegend());
+  if (S.prevBest > 0 && S.score > S.prevBest) w.append(el("div",{class:"record",text:`NEW PERSONAL BEST · +${km(S.score - S.prevBest)} KM`}));
+  else if (S.prevBest > 0) w.append(el("p",{class:"vnote",text:`${km(S.prevBest - S.score)} km short of your best (${km(S.prevBest)} km). One Niche answer is worth up to 900 km.`}));
+  else w.append(el("p",{class:"vnote",text:"First flight logged. Now beat it."}));
+  const kind = daily ? "today" : "best";
+  const others = rowsFor(kind).filter(r => r.id !== uid).map(r => r.v);
+  if (others.length){
+    const rank = others.filter(v => v > S.score).length + 1, ahead = others[rank - 2];
+    w.append(el("p",{class:"vnote"}, document.createTextNode(daily ? "Today you rank " : "This flight ranks "), el("b",{text:"#" + rank}), document.createTextNode(` of ${others.length + 1}`),
+      document.createTextNode(ahead ? `, ${km(ahead - S.score)} km behind #${rank - 1}.` : ". You're on top.")));
+  }
+  if (daily){ const st = currentStreak(myStats()); w.append(el("p",{class:"vnote"}, document.createTextNode("Daily streak: "), el("b",{text: st ? st + (st === 1 ? " day" : " days") : "1 day"}), document.createTextNode(`. Next Daily Flight in ${untilTomorrow()}.`))); }
+  w.append(el("div",{class:"tiles"},
+    tile("Avg answer", el("div",{class:"v",text:avg}), "out of 100"),
+    tile("Best pick", el("div",{class:"v",text:S.bestPick}), "out of 100"),
+    tile("Best combo", el("div",{class:"v",text: S.maxCombo ? "x" + S.maxCombo : "–"}), S.jackpots + " Ultra niche")
+  ));
+  const fresh = S.runBadges.map(id => BADGES.find(b => b.id === id)).filter(Boolean);
+  if (fresh.length) w.append(el("div",{class:"newbadges"}, el("div",{class:"label",text:"Badges unlocked"}), el("div",{class:"badges"}, ...fresh.map(b => el("span",{class:"badge on",text:b.name.toUpperCase(),title:b.how})))));
+  else { const nb = BADGES.find(b => !earnedBadges().has(b.id)); if (nb) w.append(el("p",{class:"vnote"}, document.createTextNode("Next badge: "), el("b",{text:nb.name}), document.createTextNode(". " + nb.how + "."))); }
+  const again = daily ? el("button",{class:"btn primary big",type:"button",text:"PLAY UNLIMITED",onclick:launchUnlimited})
+                      : el("button",{class:"btn primary big",type:"button",id:"startBtn",text:"FLY AGAIN",onclick:launchUnlimited});
+  w.append(el("div",{class:"actions"}, again, copyButton(), el("button",{class:"btn ghost",type:"button",text:"BACK TO LOBBY",onclick:() => go("lobby")})));
+  w.append(el("textarea",{id:"shareText",class:"sharebox",rows:"3",readonly:"",hidden:"","aria-label":"Your result to copy"}));
+  if (!myStats().handle){
+    const f = el("form",{class:"handle",id:"handleForm"},
+      el("label",{class:"label",for:"handleInput",style:"flex-basis:100%",text:"Pick a leaderboard name so people know who to beat"}),
+      el("input",{id:"handleInput",maxlength:"20",placeholder:"Your pilot name",autocomplete:"off"}),
+      el("button",{class:"btn ghost",type:"submit",text:"SAVE"}));
+    f.addEventListener("submit", saveHandle);
+    w.append(f);
+  }
+  w.append(el("p",{class:"toast",id:"myToast",text:S.toastMsg || ""}));
+  const lg = renderLog(50, "Every round"); if (lg) w.append(lg);
+  return w;
+}
+
+// ---------- leaderboard data ----------
+function rowsFor(kind){ return (LB[kind] || []).filter(r => r.v != null); }
+function avatarFor(r){
+  const hue = [...String(r.id)].reduce((h,ch) => (h*31 + ch.charCodeAt(0)) % 360, 7);
+  const letter = ((r.name || "P").trim()[0] || "P").toUpperCase().replace(/[^A-Z0-9]/, "P");
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 26'><circle cx='13' cy='13' r='13' fill='hsl(${hue},55%,45%)'/><text x='13' y='17.5' font-family='monospace' font-size='12' font-weight='700' fill='white' text-anchor='middle'>${letter}</text></svg>`)}`;
+}
+function leaderList(kind, limit){
+  if (!online) return el("p",{class:"empty",text:"The leaderboard can't be reached right now. It will load when the connection is back."});
+  const rows = rowsFor(kind);
+  if (!rows.length) return el("p",{class:"empty",text: kind === "today" ? "Nobody has flown today's Daily Flight yet. Be first." : "No flights posted yet. Finish a flight and you're on it."});
+  const shown = rows.slice(0, limit), meIdx = rows.findIndex(r => r.id === uid);
+  if (meIdx >= limit) shown.push(rows[meIdx]);
+  return el("ol",{class:"lb"}, ...shown.map(r => {
+    const i = rows.indexOf(r), nm = (r.name && String(r.name).slice(0,20)) || "Pilot";
+    const img = el("img",{alt:""}); img.src = avatarFor(r);
+    const sub = kind === "today" ? el("small",null, gridBlocks(r.grid, true), document.createTextNode(r.streak > 1 ? ` ${r.streak} day streak` : "")) : el("small",{text:`${r.runs} flights · ${r.badges} badges`});
+    return el("li",{class: r.id===uid ? "me" : ""},
+      el("span",{class:"rk",text:String(i+1).padStart(2,"0")}), img,
+      el("span",{class:"nm"}, document.createTextNode(nm + (r.id===uid ? " (you)" : "")), sub),
+      el("span",{class:"sc",text:km(r.v) + " KM"}));
+  }));
+}
+function lbTabs(onPick){
+  const t = el("div",{class:"tabs",role:"group","aria-label":"Rank by"});
+  [["today","TODAY"],["best","BEST FLIGHT"],["total","ALL TIME"]].forEach(([k,label]) =>
+    t.append(el("button",{type:"button","aria-pressed":String(S.lbKind===k),text:label,onclick:() => { SFX.click(); S.lbKind = k; onPick(); }})));
+  return t;
+}
+
+// ---------- pages ----------
+function lobbyPane(){
+  const w = el("div",{class:"lobby"});
+  const done = dailyResult(), t = todayKey();
+  const daily = el("section",{class:"daily"});
+  daily.append(el("div",{class:"label",text:"Daily flight · " + prettyDate(t)}),
+    el("h2",{class:"daily-title",text:"TODAY'S DAILY FLIGHT"}),
+    el("p",{class:"vnote",text:`${DAILY_N} prompts from ${DAILY_N} different categories, the same for everyone today. No lives to lose. One attempt.`}));
+  if (done){
+    daily.append(el("div",{class:"daily-done"},
+      el("div",{class:"over-score small"}, document.createTextNode(km(done.score)), el("small",{text:"KM"})),
+      done.grid ? gridBlocks(showGrid(done)) : null,
+      done.grid ? gridLegend() : null,
+      el("p",{class:"vnote",text: done.incomplete ? "You started today's flight on this device. Come back tomorrow." : `You've flown today. Next Daily Flight in ${untilTomorrow()}.`})));
+    daily.append(el("button",{class:"btn ghost",type:"button",text:"TODAY'S LEADERBOARD",onclick:() => { S.lbKind = "today"; go("leaderboard"); }}));
+  } else {
+    daily.append(el("button",{class:"btn primary big",type:"button",id:"startBtn",text: S.dailyLoading ? "LOADING TODAY'S PROMPTS…" : "LAUNCH DAILY FLIGHT",onclick:startDaily}));
+  }
+  const streak = currentStreak(myStats());
+  if (streak) daily.append(el("p",{class:"streak"}, el("b",{text:streak + (streak === 1 ? " DAY" : " DAYS")}), document.createTextNode(" daily streak. Fly today to keep it.")));
+  w.append(daily);
+  w.append(el("section",{class:"mode-card"},
+    el("div",null, el("div",{class:"label",text:"Unlimited flight"}), el("h3",{text:"MIXED CATEGORIES · 3 LIVES"}),
+      el("p",{class:"vnote",text:"Random prompts, every one from a different category. Fly until you run out of lives. Play as much as you want."})),
+    el("button",{class:"btn primary",type:"button",text:"LAUNCH UNLIMITED",onclick:launchUnlimited})));
+  w.append(el("p",{class:"toast lobby-toast",id:"myToast",text:S.toastMsg || ""}));
+  w.append(modeLine());
+  return w;
+}
+function nameBox(st){
+  const f = el("form",{class:"handle",id:"handleForm"},
+    el("label",{class:"label",for:"handleInput",style:"flex-basis:100%",text: st.handle ? "Pilot name" : "Pick a pilot name for the leaderboard"}),
+    el("input",{id:"handleInput",maxlength:"20",placeholder:"Your pilot name",autocomplete:"off"}),
+    el("button",{class:"btn ghost",type:"submit",text:"SAVE"}));
+  f.querySelector("input").value = st.handle || "";
+  f.addEventListener("submit", saveHandle);
+  return f;
+}
+function lobbySide(){
+  const st = myStats();
+  const a = el("section",{class:"board glass"},
+    el("div",{class:"bhead"}, el("h3",{text:"TODAY'S TOP PILOTS"})),
+    leaderList("today", 5),
+    el("button",{class:"btn ghost wide",type:"button",text:"FULL LEADERBOARD",onclick:() => { S.lbKind = "today"; go("leaderboard"); }}));
+  const have = earnedBadges();
+  const b = el("section",{class:"board glass"},
+    el("div",{class:"bhead"}, el("h3",{text:"YOUR FLIGHT LOG"})),
+    el("div",{class:"mine"},
+      el("div",null, el("div",{class:"label",text:"Best flight"}), el("div",{class:"v",text:km(st.best)})),
+      el("div",null, el("div",{class:"label",text:"Flights"}), el("div",{class:"v",text:String(st.runs||0)})),
+      el("div",null, el("div",{class:"label",text:"Badges"}), el("div",{class:"v",text:`${[...have].filter(id => BADGES.some(x => x.id === id)).length}/${BADGES.length}`}))),
+    nameBox(st),
+    el("button",{class:"btn ghost wide",type:"button",text:"ALL STATS",onclick:() => go("stats")}));
+  return [b, a];
+}
+function leaderboardPane(){
+  const w = el("div",{class:"page"});
+  const body = el("div");
+  const draw = () => { head.querySelector(".tabs").replaceWith(lbTabs(draw)); body.replaceChildren(...(S.lbKind === "today" ? [gridLegend()] : []), el("div",{class:"lb-scroll"}, leaderList(S.lbKind, Infinity)));
+    const n = (LB.counts && LB.counts[S.lbKind]) || rowsFor(S.lbKind).length, live = online ? ` · ${n} ${n === 1 ? "pilot" : "pilots"} · updates live` : "";
+    note.textContent = (S.lbKind === "today" ? `Today's Daily Flight · ${prettyDate(todayKey())} · resets in ${untilTomorrow()}` : S.lbKind === "best" ? "Each pilot's highest single flight" : "Every km each pilot has ever flown") + live; };
+  const head = el("div",{class:"bhead"}, el("h2",{class:"page-title",text:"LEADERBOARD"}), lbTabs(() => draw()));
+  const note = el("p",{class:"vnote"});
+  w.append(head, note, body);
+  draw();
+  return w;
+}
+function statsPane(){
+  const st = myStats(), have = earnedBadges();
+  const w = el("div",{class:"page"});
+  w.append(el("h2",{class:"page-title",text:"YOUR STATS"}));
+  w.append(el("div",{class:"tiles four"},
+    tile("Best flight", el("div",{class:"v",text:km(st.best)}), "km"),
+    tile("All time", el("div",{class:"v",text:km(st.total)}), "km"),
+    tile("Flights", el("div",{class:"v",text:String(st.runs||0)}), st.runs ? "avg " + km(Math.round((st.total||0)/st.runs)) + " km" : ""),
+    tile("Daily streak", el("div",{class:"v",text:String(currentStreak(st))}), currentStreak(st) === 1 ? "day" : "days"),
+    tile("Ultra niche", el("div",{class:"v",text:String(st.jackpots||0)}), "answers 91+"),
+    tile("Best pick", el("div",{class:"v",text:String(st.bestPick||st.bestStreak||0)}), "out of 100"),
+    tile("Best combo", el("div",{class:"v",text: st.bestCombo ? "x" + st.bestCombo : "–"}), "56+ in a row"),
+    tile("Today", el("div",{class:"v",text: st.daily && st.daily.date === todayKey() ? km(st.daily.score) : "–"}), "daily km")));
+  w.append(el("div",{class:"label badges-label",text:`Badges · ${[...have].filter(id => BADGES.some(x => x.id === id)).length} of ${BADGES.length}`}));
+  w.append(el("div",{class:"badge-grid"}, ...[...BADGES].sort((a,b) => (have.has(b.id) ? 1 : 0) - (have.has(a.id) ? 1 : 0)).map(b => el("div",{class:"badge-card" + (have.has(b.id) ? " on" : "")}, el("b",{text:b.name.toUpperCase()}), el("span",{text:b.how})))));
+  const recent = (st.recent || []);
+  if (recent.length){
+    w.append(el("div",{class:"label",text:"Recent flights"}));
+    w.append(el("ul",{class:"recent"}, ...recent.map(r => { const when = new Date(r.at).toLocaleDateString(undefined,{month:"short",day:"numeric"});
+      const mode = r.mode === "daily" ? "Daily" : "Unlimited";
+      return el("li",null, el("span",{text:`${when} · ${mode} · ${r.races} rounds`}), el("b",{text:km(r.score) + " KM"})); })));
+  }
+  const f = el("form",{class:"handle",id:"handleForm"},
+    el("label",{class:"label",for:"handleInput",style:"flex-basis:100%",text:"Board name"}),
+    el("input",{id:"handleInput",maxlength:"20",placeholder:"Pick a name for the leaderboard",autocomplete:"off"}),
+    el("button",{class:"btn ghost",type:"submit",text:"SAVE"}));
+  f.querySelector("input").value = st.handle || "";
+  f.addEventListener("submit", saveHandle);
+  w.append(f, el("p",{class:"toast",id:"myToast",text:S.toastMsg || ""}));
+  return w;
+}
+function howPane(){
+  const w = el("div",{class:"page"});
+  w.append(el("h2",{class:"page-title",text:"HOW TO PLAY"}),
+    el("ol",{class:"howto"},
+      el("li",{text:"Name something in the category before the 25 second clock runs out."}),
+      el("li",{text:"Every right answer scores 1 to 100 points. The more niche, the more it's worth."}),
+      el("li",{text:"Points are altitude. 1 point = 10 km. Climb as high as you can."}),
+      el("li",{text:"Unlimited flights give you 3 lives. A wrong answer or no answer costs one. An Ultra niche answer (91+) repairs one."}),
+      el("li",{text:"Combo: answers scoring 56+ back to back add +10, then +20, then +30 bonus points."})),
+    scaleBar(null),
+    el("ul",{class:"rules"}, ...BANDS.map((b,i) => el("li",null, el("span",{class:"chip t"+(i+1),text:RANGES[i]}), el("span",null, el("b",{text:b.name + ". "}), document.createTextNode(b.blurb))))),
+    el("h3",{class:"sub-title",text:"EXACT ANSWERS"}),
+    el("p",{class:"vnote",text:"Answers must be real and spelled out in full. Capitals, punctuation, accents, spacing and plurals don't matter. A misspelled or shortened answer bounces back with one “Did you mean” correction, and the clock pauses until you start typing. A real answer that doesn't fit the category is a miss."}),
+    el("h3",{class:"sub-title",text:"MODES"}),
+    el("ul",{class:"modes-list"},
+      el("li",null, el("b",{text:"Daily Flight. "}), document.createTextNode(`${DAILY_N} prompts, the same for everyone today. No lives. One attempt. Keep a daily streak going.`)),
+      el("li",null, el("b",{text:"Unlimited. "}), document.createTextNode("Random prompts, every one from a different category. 3 lives. Play as much as you want."))),
+    el("h3",{class:"sub-title",text:"ALTITUDE ZONES"}),
+    el("p",{class:"vnote",text:"Clouds at 250 km, the Stratosphere at 1,000 km, Orbit at 2,500 km, the Moon at 5,000 km, Deep space past 9,000 km. Your best flight and the top flight show up as lines in the sky to chase."}),
+    el("h3",{class:"sub-title",text:"BADGES"}),
+    el("div",{class:"badge-grid"}, ...BADGES.map(b => el("div",{class:"badge-card on"}, el("b",{text:b.name.toUpperCase()}), el("span",{text:b.how})))),
+    el("div",{class:"actions"}, el("button",{class:"btn primary",type:"button",text:"BACK TO LOBBY",onclick:() => go("lobby")})));
+  return w;
+}
+
+function renderPane(){
+  const pane = $("pane");
+  if (S.page === "play"){ pane.replaceChildren(); return; }
+  if (S.page === "lobby" && S.phase === "idle") S.prevBest = myStats().best || 0;
+  const v = S.page === "lobby" ? lobbyPane() : S.page === "results" ? flightSummary() : S.page === "leaderboard" ? leaderboardPane() : S.page === "stats" ? statsPane() : howPane();
+  pane.replaceChildren(v);
+}
+function renderSide(){
+  const side = $("side");
+  if (S.page === "lobby") side.replaceChildren(...lobbySide());
+  else if (S.page === "results"){
+    const kind = S.mode === "daily" ? "today" : "best";
+    side.replaceChildren(el("section",{class:"board glass"}, el("div",{class:"bhead"}, el("h3",{text: kind === "today" ? "TODAY'S BOARD" : "TOP FLIGHTS"})), leaderList(kind, 8),
+      el("button",{class:"btn ghost wide",type:"button",text:"FULL LEADERBOARD",onclick:() => { S.lbKind = kind; go("leaderboard"); }})));
+  }
+  else side.replaceChildren();
+}
+function renderSum(){
+  const sp = $("sumPanel");
+  if (S.page === "play" && S.phase === "result" && S.revealed && S.verdict){
+    sp.hidden = false;
+    const lg = renderLog(8, "This flight");
+    sp.replaceChildren(roundSummary(), ...(lg ? [lg] : []));
+    sp.scrollTop = 0;
+  } else { sp.hidden = true; sp.replaceChildren(); }
+}
+
+// The play screen: just the prompt, floating above the rocket.
+function renderAir(){
+  const air = $("air"); air.replaceChildren();
+  if (S.page !== "play") return;
+  const c = S.current;
+  if (S.phase === "transit" || S.phase === "loading" || !c){
+    air.append(el("p",{class:"air-hint"}, el("span",{class:"spin","aria-hidden":"true"}), "Fueling up…"));
+    return;
+  }
+  if (S.phase === "result" && S.revealed) return;
+  const daily = S.mode === "daily";
+  const quit = el("button",{type:"button",class:"quit",text:"END FLIGHT"});
+  quit.addEventListener("click", () => {
+    if (Date.now() - (S.quitArm || 0) < 3000){ endRun(); return; }
+    S.quitArm = Date.now(); quit.textContent = "TAP AGAIN TO END";
+    setTimeout(() => { if (quit.isConnected) quit.textContent = "END FLIGHT"; }, 3000);
+  });
+  const top = el("div",{class:"air-top"},
+    el("span",{class:"cat",text:(daily ? `Daily ${S.round}/${DAILY_N}` : "Round " + S.round) + " · " + (c.category||"Mixed")}),
+    daily ? null : el("span",{class:"lives" + (S.lives === 1 ? " last" : ""), "aria-label":livesText(S.lives)}, el("span",{class:"label",text:"Lives"}), engines(S.lives), el("b",{text:S.lives + " left"})),
+    el("span",{class:"label alt",text:km(S.score) + " km"}));
+  if (S.combo >= 1) top.append(el("span",{class:"chip t4",text:"COMBO x" + S.combo}));
+  top.append(el("span",{class:"secs",id:"secs",text:Math.ceil(S.left)+"s"}), quit);
+  air.append(top, el("h2",{class:"air-prompt",text:c.prompt}));
+  if (S.phase === "result"){
+    const v = S.verdict;
+    air.append(el("div",{class:"air-verdict" + (!v.valid ? " bad" : v.tier === 6 ? " top" : "")},
+      tierChip(v),
+      el("div",{class:"air-ans",text: v.answer ? (v.valid ? v.canonical : v.answer) : "No answer"}),
+      el("div",{class:"air-pts",text:(v.valid ? v.score : 0) + "/100"}),
+      v.bonus ? el("div",{class:"air-bonus",text:`+${v.bonus} combo bonus`}) : null,
+      v.repaired ? el("div",{class:"air-life",text:"Life repaired · " + livesText(S.lives)}) : null,
+      !v.valid && !v.error && !daily ? el("div",{class:"air-lost",text:"Lost a life · " + livesText(S.lives)}) : null,
+      v.note ? el("p",{class:"air-note",text:v.note}) : null));
+    return;
+  }
+  air.append(el("div",{class:"timer",id:"timer"}, el("i")));
+  const f = el("form",{class:"answer",autocomplete:"off"});
+  const inp = el("input",{id:"ans",maxlength:"40",placeholder:"Your answer",autocomplete:"off",autocapitalize:"off",spellcheck:"false","aria-label":"Your answer"});
+  const b = el("button",{class:"btn primary",type:"submit",text: S.phase==="judging" ? "CHECKING" : "FIRE"});
+  if (S.phase === "judging"){ inp.disabled = true; b.disabled = true; }
+  inp.value = S.pending || "";
+  inp.addEventListener("input", () => { if (S.pauseUntil){ S.pauseUntil = 0; paintTimer(); } });
+  f.append(inp,b);
+  f.addEventListener("submit", e => {
+    e.preventDefault();
+    const v = inp.value.trim();
+    if (!v || S.phase !== "play") return;
+    S.pending = v; submit(v);
+  });
+  air.append(f);
+  if (S.bounce && S.phase === "play"){
+    const bo = S.bounce;
+    const box = el("div",{class:"bounce",role:"alert"});
+    if (bo.suggestion){
+      box.append(el("p",{class:"didyou"}, document.createTextNode("Did you mean "),
+        el("button",{type:"button",class:"sug",text:"“" + bo.suggestion + "”",onclick:() => { SFX.click(); const i = $("ans"); if (i){ i.value = bo.suggestion; i.focus(); } }}),
+        document.createTextNode("?")));
+    } else {
+      box.append(el("p",{class:"didyou"}, el("b",{text:"“" + bo.answer + "”"}), document.createTextNode(" is shortened. Write out the full name.")));
+    }
+    box.append(el("p",{class:"hint",text: bo.src === "list" ? "Spelling check. Clock paused until you type. Sure it's right? Fire it again and the judge will check." : "Clock paused until you type."}));
+        air.append(box);
+  }
+  air.append(S.phase==="judging" ? el("p",{class:"air-hint"},el("span",{class:"spin","aria-hidden":"true"}),"Checking your answer. The clock is paused.")
+                                 : scaleBar(null, true));
+  paintTimer();
+}
+
+document.querySelectorAll(".pages button").forEach(b => b.addEventListener("click", () => go(b.dataset.page)));
+$("homeBtn").addEventListener("click", () => go("lobby"));
+function paintSound(){ const b = $("soundBtn"); b.setAttribute("aria-pressed", String(SFX.on)); b.textContent = SFX.on ? "SOUND ON" : "SOUND OFF"; }
+$("soundBtn").addEventListener("click", () => { SFX.set(!SFX.on); paintSound(); SFX.click(); });
+paintSound();
+document.addEventListener("pointerdown", () => SFX.unlock(), {once:true});
+
+boot();
+})();
+</script>
+</body>
+</html>
