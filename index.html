@@ -965,7 +965,7 @@ function judgeOffline(ans){
     return {valid:true, score:bookScore(t, book[t].indexOf(w), book[t].length), canonical:titleCase(w), ...extra};
   const sug = closest(a, book.flat(), ans);
   if (sug) return {bounce:true, kind:"typo", suggestion:titleCase(sug)};
-  return {valid:false, note:"Not on the list for this one.", ...extra};
+  return {bounce:true, kind:"wrong", note:"Not on the list for this one."};
 }
 // Instant check against the answer list fetched for this prompt. Returns null when the answer isn't known.
 function judgeList(ans, list){
@@ -995,7 +995,7 @@ function queueJudge(fn){
 async function judgeServer(ans){
   if (S.pendingJudge) await S.pendingJudge;
   const j = await api("judge", {runId: S.runId, prompt: S.current.prompt, answer: ans});
-  if (j.status === "bounce") return {bounce:true, kind:j.kind, suggestion:j.suggestion};
+  if (j.status === "bounce") return {bounce:true, kind:j.kind, suggestion:j.suggestion, note:j.note};
   if (j.status === "error") return {valid:false, error:true, note:j.note};
   const extra = {common:j.common || [], rare:j.rare || "", note:j.note || "", state:j.state};
   if (j.status === "valid") return {valid:true, score:j.score, canonical:j.canonical, ...extra};
@@ -1010,7 +1010,7 @@ async function submit(ans){
   // A repeat of something the judge or the offline book already bounced gets the same answer instantly.
   if (prev && prev.src !== "list") { S.bounce = prev; SFX.deny(); renderAll(); refocus(); return; }
   let v = null, fast = null;
-  if (!S.ranked) v = S.current.book ? judgeOffline(ans) : {valid:false, note:"Not on the list for this one."};
+  if (!S.ranked) v = S.current.book ? judgeOffline(ans) : {bounce:true, kind:"wrong", note:"Not on the list for this one."};
   else if (!prev && S.current.list){ const lv = judgeList(ans, S.current.list); if (lv && lv.bounce) v = lv; else if (lv && lv.valid) fast = lv; }
   if (v && v.bounce) return bounce(ans, key, v, S.ranked ? "list" : "book");
   SFX.lock();
@@ -1039,7 +1039,7 @@ async function submit(ans){
 function bounce(ans, key, v, src){
   const first = !S.bounced[key];
   v.answer = ans; v.src = src; S.bounced[key] = v;
-  if (first && S.pauseBudget > 0){ const ms = Math.min(6000, S.pauseBudget); S.pauseBudget -= ms; S.pauseUntil = Date.now() + ms; }
+  if (first && v.kind !== "wrong" && S.pauseBudget > 0){ const ms = Math.min(6000, S.pauseBudget); S.pauseBudget -= ms; S.pauseUntil = Date.now() + ms; }
   S.bounce = v; S.pending = ans; S.phase = "play"; SFX.deny();
   renderAll(); refocus();
 }
@@ -1092,7 +1092,7 @@ function finish(ans, v){
     if (S.clean >= 10) award("flawless10");
     if (S.left >= SECS - 5) award("quick");
     if (S.left <= 2) award("clutch");
-    if (Object.keys(S.bounced || {}).length) award("proof");
+    if (Object.values(S.bounced || {}).some(b => b.kind === "typo")) award("proof");
     if (S.mode !== "daily" && S.lives === 1 && v.score >= 76) award("comeback");
     if (S.score >= 25) award("clouds");
     if (S.score >= 100) award("strato");
@@ -2296,12 +2296,12 @@ function howPane(){
       el("li",{text:"Name something in the category before the 25 second clock runs out."}),
       el("li",{text:"Every right answer scores 1 to 100 points. The more niche, the more it's worth."}),
       el("li",{text:"Points are altitude. 1 point = 10 km. Climb as high as you can."}),
-      el("li",{text:"Unlimited flights give you 3 lives. A wrong answer or no answer costs one. An Ultra niche answer (91+) repairs one."}),
+      el("li",{text:"Unlimited flights give you 3 lives. Wrong answers just bounce back, so keep guessing. Running out of time costs one. An Ultra niche answer (91+) repairs one."}),
       el("li",{text:"Combo: answers scoring 56+ back to back add +10, then +20, then +30 bonus points."})),
     scaleBar(null),
     el("ul",{class:"rules"}, ...BANDS.map((b,i) => el("li",null, el("span",{class:"chip t"+(i+1),text:RANGES[i]}), el("span",null, el("b",{text:b.name + ". "}), document.createTextNode(b.blurb))))),
     el("h3",{class:"sub-title",text:"EXACT ANSWERS"}),
-    el("p",{class:"vnote",text:"Answers must be real and spelled out in full. Capitals, punctuation, accents, spacing and plurals don't matter. A misspelled or shortened answer bounces back with one “Did you mean” correction, and the clock pauses until you start typing. A real answer that doesn't fit the category is a miss."}),
+    el("p",{class:"vnote",text:"Answers must be real and spelled out in full. Capitals, punctuation, accents, spacing and plurals don't matter. A misspelled or shortened answer bounces back with one “Did you mean” correction, and the clock pauses until you start typing. A wrong answer isn't accepted, but the round keeps going and the clock keeps running, so try another. Only running out of time is a miss."}),
     el("h3",{class:"sub-title",text:"MODES"}),
     el("ul",{class:"modes-list"},
       el("li",null, el("b",{text:"Daily Flight. "}), document.createTextNode(`${DAILY_N} prompts, the same for everyone today. No lives. One attempt. Keep a daily streak going.`)),
@@ -2399,10 +2399,12 @@ function renderAir(){
       box.append(el("p",{class:"didyou"}, document.createTextNode("Did you mean "),
         el("button",{type:"button",class:"sug",text:"“" + bo.suggestion + "”",onclick:() => { SFX.click(); const i = $("ans"); if (i) i.value = bo.suggestion; submit(bo.suggestion); }}),
         document.createTextNode("?")));
+    } else if (bo.kind === "wrong"){
+      box.append(el("p",{class:"didyou"}, el("b",{text:"“" + bo.answer + "”"}), document.createTextNode(" isn't accepted. Try another answer.")));
     } else {
       box.append(el("p",{class:"didyou"}, el("b",{text:"“" + bo.answer + "”"}), document.createTextNode(" is shortened. Write out the full name.")));
     }
-    box.append(el("p",{class:"hint",text: bo.src === "list" ? "Spelling check. Clock paused until you type. Sure it's right? Fire it again and the judge will check." : "Clock paused until you type."}));
+    box.append(el("p",{class:"hint",text: bo.kind === "wrong" ? "The clock is still running." : bo.src === "list" ? "Spelling check. Clock paused until you type. Sure it's right? Fire it again and the judge will check." : "Clock paused until you type."}));
         air.append(box);
   }
   air.append(S.phase==="judging" ? el("p",{class:"air-hint"},el("span",{class:"spin","aria-hidden":"true"}),"Checking your answer. The clock is paused.")
