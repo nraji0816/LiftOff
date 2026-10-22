@@ -1,0 +1,12 @@
+{
+  "name": "liftoff",
+  "private": true,
+  "type": "module",
+  "description": "Liftoff: a category game where niche answers launch your rocket higher.",
+  "scripts": {
+    "dev": "node dev-server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
