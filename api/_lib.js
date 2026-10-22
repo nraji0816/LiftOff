@@ -24,8 +24,9 @@ export function route(methods, fn, opts = {}){
       if (typeof body === "string"){ try { body = JSON.parse(body || "{}"); } catch { body = {}; } }
       body = body && typeof body === "object" ? body : {};
       const ip = String(req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
-      if (opts.ipLimit !== false) await limit("ip:" + ip, MAX_REQUESTS_PER_IP_PER_DAY);
-      const out = await fn({req, body, ip, query: req.query || Object.fromEntries(new URL(req.url, "http://x").searchParams)});
+      const gate = opts.ipLimit !== false ? limit("ip:" + ip, MAX_REQUESTS_PER_IP_PER_DAY) : null;
+      const work = fn({req, body, ip, query: req.query || Object.fromEntries(new URL(req.url, "http://x").searchParams)});
+      const [out] = await Promise.all([work, gate]);
       res.setHeader("Cache-Control", "no-store");
       res.status(200).json(out);
     } catch (e){
@@ -37,8 +38,10 @@ export function route(methods, fn, opts = {}){
 }
 
 // ---------- storage: Supabase REST, or memory in demo mode ----------
-const SB = (env.SUPABASE_URL || "").replace(/\/$/, "") + "/rest/v1/";
-const SBH = () => ({apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: "Bearer " + env.SUPABASE_SERVICE_ROLE_KEY, "Content-Type": "application/json"});
+// Accepts the project URL with or without a trailing /rest/v1 or slash.
+const SB = (env.SUPABASE_URL || "").trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, "").replace(/\/+$/, "") + "/rest/v1/";
+// Works with both the legacy service_role key (a JWT) and the newer sb_secret_ keys, which go in the apikey header only.
+const SBH = () => { const k = env.SUPABASE_SERVICE_ROLE_KEY; return k && k.startsWith("sb_") ? {apikey: k, "Content-Type": "application/json"} : {apikey: k, Authorization: "Bearer " + k, "Content-Type": "application/json"}; };
 async function sb(path, opts = {}){
   const r = await fetch(SB + path, {...opts, headers: {...SBH(), ...(opts.headers || {})}});
   const text = await r.text();
@@ -81,6 +84,12 @@ export const store = {
   async updateRun(id, patch){
     if (MOCK){ const r = {...mem.runs.get(id), ...patch}; mem.runs.set(id, r); return r; }
     const {data} = await sb(`runs?id=eq.${enc(id)}`, {method:"PATCH", headers:{Prefer:"return=representation"}, body: JSON.stringify(patch)}); return data[0];
+  },
+  // Every prompt this pilot has been given in recent flights (so nobody gets the same prompt twice).
+  async promptHistory(playerId, n = 60){
+    if (MOCK) return [...mem.runs.values()].filter(r => r.player_id === playerId).flatMap(r => r.issued || []);
+    const {data} = await sb(`runs?player_id=eq.${enc(playerId)}&select=issued&order=created_at.desc&limit=${n}`);
+    return (data || []).flatMap(r => r.issued || []);
   },
   async countRunsSince(playerId, iso){
     if (MOCK) return [...mem.runs.values()].filter(r => r.player_id === playerId && r.created_at >= iso).length;
@@ -285,7 +294,7 @@ export const bookFor = prompt => BOOK.find(b => b[0] === prompt) || null;
 export function offlinePrompts(n, avoid){
   const skip = new Set((avoid || []).map(squash));
   let pool = BOOK.filter(b => !skip.has(squash(b[0])));
-  if (pool.length < n) pool = BOOK.slice();
+  if (!pool.length) pool = BOOK.slice();
   return shuffle(pool.slice()).slice(0, n).map(b => ({prompt: b[0], category: b[1]}));
 }
 export function seededOffline(day){
@@ -300,7 +309,7 @@ export async function genPrompts(themes, avoid){
 Write exactly one prompt for each theme below, in this order. Each prompt must clearly belong to its own theme.
 ${list}
 ${PROMPT_STYLE}
-Do not reuse any of these: ${(avoid || []).slice(-60).join(" | ") || "none"}. Random seed: ${Math.random().toString(36).slice(2,8)}.
+Pick a fresh, specific angle within each theme, not the first obvious prompt. Do not reuse or closely reword any of these: ${(avoid || []).slice(-120).join(" | ") || "none"}. Random seed: ${Math.random().toString(36).slice(2,8)}.
 Reply with only a JSON array of ${themes.length} prompt strings, in the same order.`;
   const arr = await askClaude(q, 900);
   const out = [];
@@ -340,27 +349,32 @@ function closest(a, words, raw){
 const isTypoOf = (sug, ans) => { const a = squash(ans), n = squash(sug); return !!n && n !== a && lev(a, n) <= Math.max(2, Math.ceil(a.length*.3)); };
 
 // Answer list for a prompt: built from the offline book, or written once by Claude and cached.
-export async function listFor(prompt){
+const listKey = prompt => squash(prompt).slice(0, 180);
+// Fast path used while judging: the offline book or an already-cached list, never a fresh Claude call.
+export async function knownList(prompt){
   const b = bookFor(prompt);
   if (b) return b[2].flatMap((tier,t) => tier.map((w,i) => [titleCase(w), bookScore(t, i, tier.length)]));
-  const key = squash(prompt).slice(0, 180);
-  const cached = await store.getList(key); if (cached) return cached;
+  try { return await store.getList(listKey(prompt)); } catch { return null; }
+}
+export async function listFor(prompt){
+  const known = await knownList(prompt); if (known) return known;
+  const key = listKey(prompt);
   const q = `For a category game, list the valid answers to this prompt: "${prompt}"
-Give 60 to 100 real answers that clearly fit, each in its exact full proper form (no nicknames or abbreviations), ordered from most common to rarest.
+Give 50 to 70 real answers that clearly fit, each in its exact full proper form (no nicknames or abbreviations), ordered from most common to rarest.
 Score each 1 to 100 for how uncommon it is among 100 random American adults: said by 30% or more = 1 to 15; 10 to 30% = 16 to 35; 3 to 10% = 36 to 55; 1 to 3% = 56 to 75; under 1% = 76 to 90; deep cuts almost nobody thinks of = 91 to 100.
 Reply with only a JSON array of [answer, score] pairs, like: [["Pepperoni",4],["Hot Honey",80]]`;
-  const arr = await askClaude(q, 3000);
+  const arr = await askClaude(q, 1800);
   const list = Array.isArray(arr) ? arr.filter(x => Array.isArray(x) && typeof x[0] === "string" && x[0].length < 60).map(x => [x[0], Math.max(1, Math.min(100, Math.round(Number(x[1]) || 30)))]) : [];
   if (list.length) await store.putList(key, prompt, list);
   return list;
 }
 
 // Decide one answer. Returns {status: "valid"|"invalid"|"bounce"|"error", ...}
-export async function judge(prompt, answer){
+export async function judge(prompt, answer, listPromise){
   const a = squash(answer);
   if (!a) return {status:"invalid", note:"No answer."};
   const book = bookFor(prompt);
-  let list = null; try { list = await listFor(prompt); } catch { list = null; }
+  let list = null; try { list = await (listPromise || knownList(prompt)); } catch { list = null; }
   const extra = () => list && list.length ? {common: list.slice(0,3).map(x => x[0]), rare: (list.filter(x => x[1] >= 80)[0] || list[list.length-1])[0]} : {common:[], rare:""};
   if (list) for (const [w, sc] of list) if (sameForm(a, squash(w))) return {status:"valid", score: sc, canonical: w, note:"", ...extra()};
   if (list){ const sug = closest(a, list.map(x => x[0]), answer); if (sug) return {status:"bounce", kind:"typo", suggestion: sug}; }
@@ -380,7 +394,7 @@ said by 30% or more = 1 to 15; 10 to 30% = 16 to 35; 3 to 10% = 36 to 55; 1 to 3
 "note" says what's wrong or why, in under 10 words, without naming any other valid answer. "canonical" is the answer's proper full name.
 Reply with only JSON: {"status":"valid","canonical":"Hot Honey","score":78,"note":"Niche but legit.","suggestion":"","common":["Pepperoni","Cheese","Sausage"],"rare":"one very rare valid answer"}`;
   let r;
-  try { r = await askClaude(q, 400); } catch { return {status:"error", note:"The judge is busy. This round doesn't count against you."}; }
+  try { r = await askClaude(q, 220); } catch { return {status:"error", note:"The judge is busy. This round doesn't count against you."}; }
   const st = r && String(r.status || "").toLowerCase();
   const ex = {common: Array.isArray(r && r.common) ? r.common.slice(0,4).map(String) : [], rare: String((r && r.rare) || "").slice(0,60)};
   const note = String((r && r.note) || "").slice(0,100);
@@ -388,7 +402,7 @@ Reply with only JSON: {"status":"valid","canonical":"Hot Honey","score":78,"note
   if (st === "short") return {status:"bounce", kind:"short"};
   if (st === "valid"){
     const score = Math.max(1, Math.min(100, Math.round(Number(r.score) || 1))), canonical = String(r.canonical || answer).slice(0,60);
-    if (list) { list.push([canonical, score]); store.putList(squash(prompt).slice(0,180), prompt, list).catch(() => {}); }
+    if (list && !book) { list.push([canonical, score]); await store.putList(listKey(prompt), prompt, list).catch(() => {}); }
     return {status:"valid", score, canonical, note, ...ex};
   }
   if (st === "invalid") return {status:"invalid", note, ...ex};
