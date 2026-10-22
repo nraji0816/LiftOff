@@ -13,7 +13,7 @@ export default route(["POST"], async ({req, body}) => {
   if ((run.answered || []).includes(prompt)) throw new HttpError(409, "answered", "That prompt was already answered.");
 
   const answer = body.answer == null ? null : String(body.answer).slice(0, 60);
-  const verdict = answer == null ? {status:"invalid", timeout:true, note:"Time ran out."} : await judge(prompt, answer, listPromise);
+  const verdict = answer == null ? {status:"invalid", timeout:true, note:"Time ran out."} : await judge(prompt, answer, listPromise, !!body.force);
   if (verdict.status === "bounce" || verdict.status === "error") return verdict;
   // A wrong answer doesn't end the round. The player keeps guessing until time runs out.
   if (verdict.status === "invalid" && answer != null) return {status:"bounce", kind:"wrong", note: verdict.note || "Not accepted."};
