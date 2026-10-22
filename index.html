@@ -136,6 +136,14 @@ body.focus .air{display:flex}
 .banner.warn{border-color:var(--bad)}.banner.warn b{color:var(--bad)}
 .banner.go{animation:bn 1.9s ease both}
 .banner[hidden]{display:none}
+.gate{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(4,6,20,.86);backdrop-filter:blur(3px)}
+.gate[hidden]{display:none}
+.gate form{width:min(420px,100%);display:flex;flex-direction:column;gap:14px;padding:24px;border:2px solid #4b5cff;background:#0b0f2a;box-shadow:0 0 0 4px #0b0f2a,0 0 30px rgba(75,92,255,.35)}
+.gate h2{font-family:"Press Start 2P",monospace;font-size:15px;line-height:1.5;margin:0;color:#fff}
+.gate p{margin:0;font-size:14px;opacity:.8}
+.gate input{font:inherit;font-size:18px;padding:12px;background:#05071a;color:#fff;border:2px solid #39407a;outline:none}
+.gate input:focus{border-color:#7f8cff}
+.gate .err{color:#ff6b6b;font-size:13px;min-height:1em}
 body.focus .banner{top:auto;bottom:max(24px,env(safe-area-inset-bottom,0px))}
 @keyframes bn{0%{opacity:0;transform:translate(-50%,-14px) scale(.9)}10%{opacity:1;transform:translate(-50%,0) scale(1.04)}16%{transform:translate(-50%,0) scale(1)}85%{opacity:1}100%{opacity:0}}
 @media (prefers-reduced-motion:reduce){.banner.go{animation:none}.air-top .lives.last .engine.on{animation:none}}
@@ -195,6 +203,8 @@ body.focus .nav,body.focus .pane,body.focus .side{display:none !important}
 .legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--muted)}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 .lb .nm small .cells{margin-right:4px}
+.lobby-toast:empty{display:none}
+.lobby-toast{color:var(--gold)}
 .lb-scroll{max-height:min(70vh,900px);overflow:auto;padding-right:4px}
 .lb .nm small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sharebox{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:2px;padding:10px;font:inherit}
@@ -376,11 +386,35 @@ form.answer input.shake{animation:shake .35s}
 @keyframes sp{to{transform:rotate(360deg)}}
 @keyframes pop{0%{transform:scale(.96);opacity:.4}100%{transform:none;opacity:1}}
 @media (prefers-reduced-motion:reduce){.verdict,.bounce,form.answer input.shake{animation:none}.spin{animation-duration:2s}.timer i{transition:none}.flash.go{animation:none}}
+/* phones */
+@media (max-width:520px){
+  body{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  input,textarea,select,form.answer input,.gate input{font-size:16px}
+  .nav{gap:8px;padding:10px 12px}
+  .nav .mark{order:1}
+  #soundBtn{order:2;padding:6px 8px;font-size:8px}
+  .pages{order:3;flex-basis:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+  .pages button{padding:9px 2px;font-size:7px;text-align:center}
+  .btn.primary{width:100%}
+  .badge-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .badge-card{padding:8px 9px;gap:4px}
+  .badge-card b{font-size:7px}
+  .badge-card span{font-size:12px;line-height:1.35}
+  .air-top{gap:6px 12px;padding:8px 10px;font-size:12px}
+  form.answer{gap:8px;flex-wrap:nowrap}
+  form.answer input{flex:1 1 0;padding:12px 12px;font-size:17px}
+  form.answer .btn{width:auto;flex:0 0 auto;padding-left:16px;padding-right:16px}
+  #nextBtn{margin-bottom:18px}
+  .sumpanel{padding:14px;top:8px;max-height:calc(100% - 16px)}
+  .gate form{padding:18px}
+  .gate h2{font-size:13px}
+}
 </style>
 </head>
 <body>
 <canvas id="space" aria-hidden="true"></canvas>
 <div class="flash" id="flash" aria-hidden="true"></div>
+<div class="gate" id="nameGate" hidden><form id="gateForm" autocomplete="off"><h2>WHAT'S YOUR PILOT NAME?</h2><p>This is how you show up on the leaderboard. You can change it later.</p><input id="gateInput" maxlength="20" placeholder="Pilot name" aria-label="Pilot name"><div class="err" id="gateErr"></div><button class="btn" type="submit" id="gateBtn">CONTINUE</button></form></div>
 <div class="banner" id="banner" role="status" hidden><b id="bnTitle"></b><span id="bnSub"></span></div>
 <div class="transit" id="transit" hidden>
   <canvas id="tcanvas" aria-hidden="true"></canvas>
@@ -739,6 +773,7 @@ async function boot(){
   try { document.fonts && document.fonts.load('20px "Press Start 2P"'); } catch(e){}
   await Promise.all([refreshMe(), refreshBoard()]);
   renderAll();
+  if (!hasName()) openGate();
   setInterval(() => {
     if (S.page === "play" || document.hidden) return;
     refreshBoard().then(() => { if (S.page !== "play"){ renderPane(); renderSide(); } });
@@ -764,16 +799,20 @@ function untilTomorrow(){
 
 async function launchUnlimited(){
   SFX.unlock(); SFX.click();
+  if (!hasName()) return openGate(launchUnlimited);
   let runId = null;
   try { await ensurePlayer(); runId = (await api("run-start", {mode:"unlimited"})).runId; }
-  catch(e){ if (e.code === "rate_limited"){ toast(e.message); S.notice = e.message; } }
+  catch(e){
+    if (e.code === "rate_limited"){ toast(e.message); S.notice = e.message; }
+    else { toast("Couldn't reach the server. Your flight won't count toward the leaderboard."); banner("OFFLINE FLIGHT", "Server unreachable. This flight won't count.", "warn"); }
+  }
   newRun("endless", null, null, runId);
 }
 function newRun(mode, pack, preset, runId){
   SFX.unlock();
   const prevBest = myStats().best || 0;
   Object.assign(S,{page:"play", mode: mode || "endless", pack: pack || null, phase:"transit", score:0, lives:LIVES, round:0, bestPick:0, jackpots:0, used:[], log:[], queue:[], current:null, verdict:null, aiThisRun:aiOK, notice:"",
-    combo:0, maxCombo:0, clean:0, runBadges:[], prevBest, recordHit:false, pauseUntil:0, quitArm:0, runId: runId || null});
+    combo:0, maxCombo:0, clean:0, runBadges:[], prevBest, recordHit:false, pauseUntil:0, quitArm:0, runId: runId || null, pendingJudge:null});
   S.ranked = !!S.runId; S.aiThisRun = S.ranked;
   if (!S.ranked && !S.notice) S.notice = "Couldn't reach the server, so this flight uses the built-in prompts and won't post to the leaderboard.";
   if (preset){
@@ -820,7 +859,7 @@ async function refill(wait){
   if (S.queue.length >= 3) return;
   if (!S.ranked) { S.queue.push(...offlineBatch()); return; }
   if (!fetching){
-    fetching = api("prompts", {runId: S.runId, avoid: [...seenAll().slice(-60), ...S.seen.slice(-20)]})
+    fetching = api("prompts", {runId: S.runId, avoid: [...seenAll().slice(-280), ...S.seen.slice(-20)]})
       .then(j => { const f = fresh(j.prompts || []); if (!f.length) throw {code:"all_seen"}; S.queue.push(...interleave(shuffle(f), lastCategory())); })
       .catch(() => { S.queue.push(...offlineBatch()); })
       .finally(() => { fetching = null; });
@@ -845,6 +884,7 @@ const currentStreak = st => (st.lastDaily === todayKey() || st.lastDaily === day
 async function startDaily(){
   if (dailyResult() || S.dailyLoading) return;
   SFX.unlock(); SFX.click();
+  if (!hasName()) return openGate(startDaily);
   S.dailyLoading = true; renderAll();
   try {
     await ensurePlayer();
@@ -946,7 +986,14 @@ function prepList(item){
 }
 
 // The server decides every score. It returns the verdict plus the flight's new state.
+// Judge calls go out one at a time, in order, so the server never sees two rounds at once.
+function queueJudge(fn){
+  const p = (S.pendingJudge || Promise.resolve()).catch(() => {}).then(fn);
+  S.pendingJudge = p.catch(() => {});
+  return p;
+}
 async function judgeServer(ans){
+  if (S.pendingJudge) await S.pendingJudge;
   const j = await api("judge", {runId: S.runId, prompt: S.current.prompt, answer: ans});
   if (j.status === "bounce") return {bounce:true, kind:j.kind, suggestion:j.suggestion};
   if (j.status === "error") return {valid:false, error:true, note:j.note};
@@ -962,12 +1009,22 @@ async function submit(ans){
   const prev = S.bounced[key];
   // A repeat of something the judge or the offline book already bounced gets the same answer instantly.
   if (prev && prev.src !== "list") { S.bounce = prev; SFX.deny(); renderAll(); refocus(); return; }
-  let v = null;
+  let v = null, fast = null;
   if (!S.ranked) v = S.current.book ? judgeOffline(ans) : {valid:false, note:"Not on the list for this one."};
-  else if (!prev && S.current.list){ const lv = judgeList(ans, S.current.list); if (lv && lv.bounce) v = lv; }
+  else if (!prev && S.current.list){ const lv = judgeList(ans, S.current.list); if (lv && lv.bounce) v = lv; else if (lv && lv.valid) fast = lv; }
   if (v && v.bounce) return bounce(ans, key, v, S.ranked ? "list" : "book");
   SFX.lock();
   if (v) return finish(ans, v);
+  // Answers already on the shared list score instantly. The server confirms in the background and has the final say.
+  if (fast){
+    const runId = S.runId;
+    queueJudge(() => judgeServer(ans)).then(r => {
+      if (S.runId !== runId || !r || !r.state) return;
+      S.score = r.state.score; S.lives = r.state.lives; S.combo = r.state.combo;
+      if (S.page === "play") renderAll();
+    }).catch(() => {});
+    return finish(ans, fast);
+  }
   S.phase = "judging"; S.pending = ans; S.bounce = null; renderAll();
   try { v = await judgeServer(ans); }
   catch(e){ v = {valid:false, error:true, note:"The judge didn't answer. This round doesn't count against you."}; }
@@ -998,7 +1055,7 @@ function finish(ans, v){
   if (ans == null) {
     v = {valid:false, timeout:true, note:"Time ran out."};
     if (S.current.book) { v.common = S.current.book[0].slice(0,4).map(titleCase); v.rare = titleCase(S.current.book[3][0]); }
-    if (S.ranked) api("judge", {runId: S.runId, prompt: S.current.prompt, answer: null}).catch(() => {});
+    if (S.ranked){ const body = {runId: S.runId, prompt: S.current.prompt, answer: null}; queueJudge(() => api("judge", body)).catch(() => {}); }
   }
   v.answer = ans;
   if (v.error) { v.pts = 0; }
@@ -1166,6 +1223,7 @@ async function postRun(){
   const run = {score:S.score, races:S.round, at:Date.now(), mode:S.mode};
   if (S.ranked){
     try {
+      if (S.pendingJudge) await S.pendingJudge;
       const j = await api("run-end", {runId: S.runId, badges: S.runBadges});
       myDoc = j.player;
       await refreshBoard();
@@ -1188,6 +1246,36 @@ async function saveHandle(ev){
     refreshBoard().then(() => { if (S.page !== "play"){ renderPane(); renderSide(); } });
   } catch(e){ toast(e.message || "Couldn't save the name. Try again."); }
 }
+// Name first: every pilot picks a name before their first flight.
+const hasName = () => !!(myStats().handle || (!online && ls.get("lo-handle", "")));
+let gateNext = null;
+function openGate(next){
+  if (next) gateNext = next;
+  const g = $("nameGate"); if (!g.hidden) return;
+  g.hidden = false; $("gateErr").textContent = "";
+  setTimeout(() => $("gateInput").focus(), 30);
+}
+async function submitGate(ev){
+  ev.preventDefault(); SFX.unlock(); SFX.click();
+  const h = $("gateInput").value.trim().replace(/\s+/g," "), err = $("gateErr"), btn = $("gateBtn");
+  if (h.length < 2){ err.textContent = "Names need at least 2 characters."; return; }
+  btn.disabled = true; btn.textContent = "SAVING..."; err.textContent = "";
+  try {
+    await ensurePlayer();
+    myDoc = (await api("player", {action:"rename", name:h})).player;
+  } catch(e){
+    btn.disabled = false; btn.textContent = "CONTINUE";
+    if (e.status === 0 || !online){ ls.set("lo-handle", h); }
+    else { err.textContent = e.message || "Couldn't save the name. Try again."; return; }
+  }
+  btn.disabled = false; btn.textContent = "CONTINUE";
+  $("nameGate").hidden = true;
+  renderAll();
+  refreshBoard().then(() => { if (S.page !== "play"){ renderPane(); renderSide(); } });
+  const next = gateNext; gateNext = null;
+  if (next) next();
+}
+$("gateForm").addEventListener("submit", submitGate);
 function toast(m){ S.toastMsg = m; const t = $("myToast"); if (t) t.textContent = m; }
 
 // ---------- space scene ----------
@@ -2060,7 +2148,7 @@ function flightSummary(){
                       : el("button",{class:"btn primary big",type:"button",id:"startBtn",text:"FLY AGAIN",onclick:launchUnlimited});
   w.append(el("div",{class:"actions"}, again, copyButton(), el("button",{class:"btn ghost",type:"button",text:"BACK TO LOBBY",onclick:() => go("lobby")})));
   w.append(el("textarea",{id:"shareText",class:"sharebox",rows:"3",readonly:"",hidden:"","aria-label":"Your result to copy"}));
-  if (!myStats().handle){
+  if (!hasName()){
     const f = el("form",{class:"handle",id:"handleForm"},
       el("label",{class:"label",for:"handleInput",style:"flex-basis:100%",text:"Pick a leaderboard name so people know who to beat"}),
       el("input",{id:"handleInput",maxlength:"20",placeholder:"Your pilot name",autocomplete:"off"}),
@@ -2128,8 +2216,18 @@ function lobbyPane(){
     el("div",null, el("div",{class:"label",text:"Unlimited flight"}), el("h3",{text:"MIXED CATEGORIES · 3 LIVES"}),
       el("p",{class:"vnote",text:"Random prompts, every one from a different category. Fly until you run out of lives. Play as much as you want."})),
     el("button",{class:"btn primary",type:"button",text:"LAUNCH UNLIMITED",onclick:launchUnlimited})));
+  w.append(el("p",{class:"toast lobby-toast",id:"myToast",text:S.toastMsg || ""}));
   w.append(modeLine());
   return w;
+}
+function nameBox(st){
+  const f = el("form",{class:"handle",id:"handleForm"},
+    el("label",{class:"label",for:"handleInput",style:"flex-basis:100%",text: st.handle ? "Pilot name" : "Pick a pilot name for the leaderboard"}),
+    el("input",{id:"handleInput",maxlength:"20",placeholder:"Your pilot name",autocomplete:"off"}),
+    el("button",{class:"btn ghost",type:"submit",text:"SAVE"}));
+  f.querySelector("input").value = st.handle || "";
+  f.addEventListener("submit", saveHandle);
+  return f;
 }
 function lobbySide(){
   const st = myStats();
@@ -2144,6 +2242,7 @@ function lobbySide(){
       el("div",null, el("div",{class:"label",text:"Best flight"}), el("div",{class:"v",text:km(st.best)})),
       el("div",null, el("div",{class:"label",text:"Flights"}), el("div",{class:"v",text:String(st.runs||0)})),
       el("div",null, el("div",{class:"label",text:"Badges"}), el("div",{class:"v",text:`${[...have].filter(id => BADGES.some(x => x.id === id)).length}/${BADGES.length}`}))),
+    nameBox(st),
     el("button",{class:"btn ghost wide",type:"button",text:"ALL STATS",onclick:() => go("stats")}));
   return [b, a];
 }
@@ -2298,7 +2397,7 @@ function renderAir(){
     const box = el("div",{class:"bounce",role:"alert"});
     if (bo.suggestion){
       box.append(el("p",{class:"didyou"}, document.createTextNode("Did you mean "),
-        el("button",{type:"button",class:"sug",text:"“" + bo.suggestion + "”",onclick:() => { SFX.click(); const i = $("ans"); if (i){ i.value = bo.suggestion; i.focus(); } }}),
+        el("button",{type:"button",class:"sug",text:"“" + bo.suggestion + "”",onclick:() => { SFX.click(); const i = $("ans"); if (i) i.value = bo.suggestion; submit(bo.suggestion); }}),
         document.createTextNode("?")));
     } else {
       box.append(el("p",{class:"didyou"}, el("b",{text:"“" + bo.answer + "”"}), document.createTextNode(" is shortened. Write out the full name.")));
