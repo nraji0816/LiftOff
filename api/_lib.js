@@ -178,7 +178,7 @@ export function parseJSON(text){
   throw new HttpError(502, "bad_ai_reply");
 }
 export async function askClaude(prompt, maxTokens = 1500, timeoutMs = 25000){
-  if (MOCK || !env.ANTHROPIC_API_KEY) throw new HttpError(503, "no_ai");
+  if (!env.ANTHROPIC_API_KEY) throw new HttpError(503, "no_ai");
   const n = await store.bump("ai");
   if (n > MAX_AI_CALLS_PER_DAY) throw new HttpError(503, "ai_budget");
   const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -326,6 +326,15 @@ export const norm = s => {
   return ALIAS[t] || t;
 };
 export const squash = t => norm(t).replace(/ /g,"");
+// The words that make a prompt what it is, so "Name a classic board game" and "Name a board game" count as the same prompt.
+const FILLER = new Set("name a an the of in on at to for from with you your youd someone something some one any kind type types sort famous popular classic common well known good great best favorite favourite real actual thing things that can could would might people often usually might find found see seen is are be its it this these those other".split(" "));
+const core = p => new Set(norm(p).split(" ").filter(w => w && !FILLER.has(w)).map(w => w.length > 3 ? w.replace(/(ies)$/, "y").replace(/(es|s)$/, "") : w));
+export function similarPrompt(a, b){
+  const x = core(a), y = core(b); if (!x.size || !y.size) return squash(a) === squash(b);
+  let both = 0; for (const w of x) if (y.has(w)) both++;
+  const small = Math.min(x.size, y.size);
+  return both / (x.size + y.size - both) >= 0.6 || (both === small && small >= 2);
+}
 function lev(a, b){
   const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
   let prev = Array.from({length:n+1}, (_,j) => j);
