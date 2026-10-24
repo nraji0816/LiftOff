@@ -985,16 +985,22 @@ function nextRound(){
 const squash = t => norm(t).replace(/ /g,"");
 const titleCase = w => w.replace(/\b\w/g, c => c.toUpperCase());
 function lev(a, b){
+  // Edit distance where swapping two neighbouring letters ("teh" for "the") counts as one slip.
   const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
-  let prev = Array.from({length:n+1}, (_,j) => j);
-  for (let i=1;i<=m;i++){ const cur = [i]; for (let j=1;j<=n;j++) cur[j] = Math.min(prev[j]+1, cur[j-1]+1, prev[j-1] + (a[i-1]===b[j-1] ? 0 : 1)); prev = cur; }
-  return prev[n];
+  const d = Array.from({length:m+1}, (_,i) => { const r = new Array(n+1).fill(0); r[0] = i; return r; });
+  for (let j=0;j<=n;j++) d[0][j] = j;
+  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++){
+    const c = a[i-1] === b[j-1] ? 0 : 1;
+    d[i][j] = Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+c);
+    if (i > 1 && j > 1 && a[i-1] === b[j-2] && a[i-2] === b[j-1]) d[i][j] = Math.min(d[i][j], d[i-2][j-2]+1);
+  }
+  return d[m][n];
 }
 const sameForm = (a, n) => n === a || n + "s" === a || n + "es" === a || a + "s" === n || a + "es" === n || (n.endsWith("y") && n.slice(0,-1) + "ies" === a);
 // The single closest known answer to what was typed, or null.
 function closest(a, words, raw){
   // Only true typos get a correction: same answer, a letter or two off. Never a different or longer answer.
-  const lim = a.length >= 8 ? 2 : a.length >= 4 ? 1 : 0, an = norm(raw || a);
+  const lim = a.length >= 11 ? 3 : a.length >= 7 ? 2 : a.length >= 4 ? 1 : 0, an = norm(raw || a);
   if (!lim) return null;
   let best = null, bd = 99;
   for (const w of words){
