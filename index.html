@@ -549,7 +549,7 @@ const BADGES = [
 const RANGES = ["10 pts","15 pts","30 pts","60 pts","85 pts","100 pts"];
 const BAND_COL = ["#FF8A3D","#F5C842","#C9E04B","#7ED957","#2FBF5F","#3DFF8F"];
 const bandOf = s => { let i = 0; BANDS.forEach((b,k) => { if (s >= b.min) i = k; }); return i + 1; };
-const ZONES = [{a:0,name:"Launch pad"},{a:25,name:"Clouds"},{a:100,name:"Stratosphere"},{a:250,name:"Orbit"},{a:500,name:"The Moon"},{a:900,name:"Deep space"}];
+const ZONES = [{a:0,name:"Launch pad"},{a:30,name:"Clouds"},{a:80,name:"Stratosphere"},{a:170,name:"Orbit"},{a:330,name:"The Moon"},{a:520,name:"Deep space"}];
 const zoneIdx = a => { let z = 0; ZONES.forEach((q,i) => { if (a >= q.a) z = i; }); return z; };
 const BOOK_RANGE = [[4,15],[18,40],[45,72],[78,98]];
 const bookScore = (t,i,n) => { const [lo,hi] = BOOK_RANGE[t]; return Math.round(lo + (hi-lo) * (n>1 ? i/(n-1) : .5)); };
@@ -1421,7 +1421,7 @@ const P = [];
 const spawn = o => { if (P.length < 1800) P.push(o); };
 
 // Sky color by altitude (points): light blue at the ground, darkening slowly into space.
-const SKY = [[0,[176,222,255]],[60,[132,198,246]],[150,[84,152,226]],[260,[44,98,188]],[380,[18,46,120]],[520,[8,16,52]],[720,[4,5,16]],[1000,[9,4,22]]];
+const SKY = [[0,[176,222,255]],[40,[132,198,246]],[100,[84,152,226]],[170,[44,98,188]],[260,[18,46,120]],[370,[8,16,52]],[520,[4,5,16]],[800,[9,4,22]]];
 function skyRGB(a){
   a = Math.max(0, a);
   for (let i=1;i<SKY.length;i++){ if (a <= SKY[i][0]){ const [a1,c1] = SKY[i-1], [a2,c2] = SKY[i]; const t = (a-a1)/(a2-a1); return c1.map((v,k) => Math.round(v + (c2[k]-v)*t)); } }
@@ -1461,12 +1461,28 @@ function sprite(c, rows, pal, cx, cy, k, flip){
   }
 }
 // Things in the sky, placed by altitude band (same layout every flight).
+// The farm around the launch pad.
+SPR.cow = ["..........KK..",".WWKKWWWWWKKK.","WWWKKWWKWWWKPP",".WWWWWWKKWWWW.",".WWWWWWWWWWW..",".K.K....K.K...",".K.K....K.K..."];
+SPR.cow2 = ["..........KK..",".WWKKWWWWWKKK.","WWWKKWWKWWWKPP",".WWWWWWKKWWWW.",".WWWWWWWWWWW..","..K.K..K.K....","..K.K..K.K...."];
+SPR.sheep = [".WWWWWW..","WWWWWWWKK","WWWWWWWKK",".WWWWWW..","..K..K..."];
+SPR.barn = ["......RRRR......","....RRRRRRRR....","..RRRRRRRRRRRR..",".RRRRRRWWRRRRRR.","RRRRRRRWWRRRRRRR","DDDDDDDDDDDDDDDD","RRRRWWWWWWWWRRRR","RRRRWBWBBWBWRRRR","RRRRWBBWWBBWRRRR","RRRRWBBWWBBWRRRR","RRRRWBWBBWBWRRRR","RRRRWWWWWWWWRRRR"];
+SPR.silo = [".GGGG.","GGGGGG","SSSSSS","SDSSDS","SSSSSS","SDSSDS","SSSSSS","SDSSDS","SSSSSS","SSSSSS"];
+SPR.hay = ["YYYYYY","YOYYOY","YYYYYY","OOOOOO"];
+SPR.fence = ["W..W..W..W","WWWWWWWWWW","W..W..W..W","WWWWWWWWWW","W..W..W..W"];
+SPR.tractor = ["......GGG...","......G.G...","GGGGGGGGG...","GGGGGGGGGGG.",".KKK...KKKK.","KKYKK.KKYYKK",".KKK...KKKK."];
 SPR.kite = ["...1...","..121..",".12221.","1222221",".12221.","..121..","...3...","..3....","...3..."];
 SPR.heli1 = ["111111111111....","......1.........","...2222222......","..224422222222..","...2222222......","...3....3.......","..3333333333...."];
 SPR.heli2 = ["...1111111111...","......1.........","...2222222......","..224422222222..","...2222222......","...3....3.......","..3333333333...."];
 SPR.blimp = ["....222222222222....","..2222222222222222..",".222222255552222222.",".222222222222222222.","..2222222222222222..","....222222222222....","........4444........"];
 SPR.asteroid = ["..1111..",".122211.","12212221","12222121","11222211",".112211.","..111..."];
 SPR.junk = ["1.11.","11111",".1.1."];
+PAL.cow = {W:"#F4F1EA",K:"#1E1E24",P:"#F2A5B0"};
+PAL.sheep = {W:"#EDEDED",K:"#2A2A30"};
+PAL.barn = {R:"#B23A2E",W:"#F4F1EA",B:"#6B2A20",D:"#7A2A22"};
+PAL.silo = {G:"#8A93A6",S:"#C9CED8",D:"#9AA3B5"};
+PAL.hay = {Y:"#E8C35A",O:"#B8902E"};
+PAL.fence = {W:"#E9E3D3"};
+PAL.tractor = {G:"#3D9B4A",K:"#22252E",Y:"#F5C842"};
 PAL.kite = {"1":"#FF4D6D","2":"#FFD166","3":"#FFFFFF"};
 PAL.heli = {"1":"#2B2F3A","2":"#E2453C","3":"#2B2F3A","4":"#9FD8FF"};
 PAL.blimp = {"2":"#C9CED8","4":"#5A6170","5":"#FF7A3D"};
@@ -1478,18 +1494,19 @@ const CREATURES = (() => {
   const rnd = seeded("liftoff-sky"), out = [];
   const pick = arr => arr[Math.floor(rnd()*arr.length)];
   const add = (t, a, speed, extra) => out.push({t, a, x:rnd(), vx:(rnd() < .5 ? -1 : 1) * speed * (.6 + rnd()*.8), n:3 + Math.floor(rnd()*3), ...(extra || {})});
-  for (let a = 4; a < 2600; a += 4 + rnd()*6 + (a > 900 ? 6 : 0)){
-    if (a < 16) add(pick(["bird","bird","kite"]), a, 30);
-    else if (a < 45) add(pick(["bird","balloon","heli","kite","bird"]), a, 32);
-    else if (a < 110) add(pick(["balloon","plane","blimp","bird","heli","plane"]), a, 45);
-    else if (a < 250) add(pick(["jet","wballoon","plane","jet"]), a, 120);
-    else if (a < 500) add(pick(["sat","sat","station","astro","junk","meteor","junk"]), a, 16);
-    else if (a < 900) add(pick(["asteroid","ufo","astro","meteor","sat","asteroid"]), a, 20);
+  // Spread over a 700 point flight so every answer flies you past new things.
+  for (let a = 3; a < 1000; a += 2.5 + rnd()*3.5){
+    if (a < 12) add(pick(["bird","bird","kite"]), a, 30);
+    else if (a < 32) add(pick(["bird","balloon","heli","kite","bird"]), a, 32);
+    else if (a < 80) add(pick(["balloon","plane","blimp","bird","heli","plane"]), a, 45);
+    else if (a < 170) add(pick(["jet","wballoon","plane","jet"]), a, 120);
+    else if (a < 330) add(pick(["sat","sat","station","astro","junk","meteor","junk"]), a, 16);
+    else if (a < 520) add(pick(["asteroid","ufo","astro","meteor","sat","asteroid"]), a, 20);
     else add(pick(["ufo","alien","comet","asteroid","asteroid","meteor","alien"]), a, 34);
   }
-  out.push({t:"aurora", a:198, x:.1, vx:0}, {t:"aurora", a:226, x:.6, vx:0});
-  [1000, 1350, 1750, 2200].forEach((a,i) => out.push({t:"planet", a, x:[.15,.82,.3,.7][i], vx:0, hue:i}));
-  [1180, 1600, 2050, 2450].forEach((a,i) => out.push({t:"galaxy", a, x:[.78,.2,.65,.25][i], vx:0}));
+  out.push({t:"aurora", a:130, x:.1, vx:0}, {t:"aurora", a:150, x:.6, vx:0});
+  [540, 600, 660, 740].forEach((a,i) => out.push({t:"planet", a, x:[.15,.82,.3,.7][i], vx:0, hue:i}));
+  [570, 630, 700, 800].forEach((a,i) => out.push({t:"galaxy", a, x:[.78,.2,.65,.25][i], vx:0}));
   return out;
 })();
 
@@ -1669,7 +1686,25 @@ function startSpace(){
   size(); window.addEventListener("resize", size);
 
   const STARS = Array.from({length:240}, () => ({x:Math.random(), y:Math.random(), r:Math.random()<.85 ? .6+Math.random()*.7 : 1.3+Math.random()*.8, l:Math.floor(Math.random()*3), p:Math.random()*6.28}));
-  const TREES = Array.from({length:26}, () => ({x:Math.random(), s:.8 + Math.random()*.6}));
+  const TREES = Array.from({length:18}, () => ({x:Math.random(), s:.8 + Math.random()*.6}));
+  // Fixed farm scene; animals wander back and forth.
+  const FARM = [
+    {t:"barn", x:.1, s:1.25}, {t:"silo", x:.165, s:1.2}, {t:"hay", x:.215}, {t:"hay", x:.24}, {t:"fence", x:.3}, {t:"fence", x:.335},
+    {t:"cow", x:.28, walk:.05, sp:.07}, {t:"cow", x:.36, walk:.04, sp:.05, flip:true}, {t:"sheep", x:.42, walk:.03, sp:.09},
+    {t:"cow", x:.66, walk:.05, sp:.06, flip:true}, {t:"sheep", x:.72, walk:.04, sp:.08}, {t:"sheep", x:.75, walk:.03, sp:.1, flip:true},
+    {t:"fence", x:.8}, {t:"fence", x:.835}, {t:"tractor", x:.9, walk:.06, sp:.04}, {t:"cow", x:.95, walk:.03, sp:.05}
+  ];
+  function drawFarm(c, t, W, gy, k){
+    for (const f of FARM){
+      let x = f.x*W, flip = !!f.flip;
+      if (f.walk){ const ph = Math.sin(t*f.sp*2 + f.x*20); x += ph*f.walk*W; flip = Math.cos(t*f.sp*2 + f.x*20) < 0; }
+      if (Math.abs(x - R.x) < 90) continue;
+      const kk = k*(f.s || .9), rows = SPR[f.t];
+      let spr = rows;
+      if (f.t === "cow" && f.walk && Math.floor(t*3 + f.x*9) % 2) spr = SPR.cow2;
+      sprite(c, spr, PAL[f.t], x, gy - rows.length*kk/2 + 1, kk, flip);
+    }
+  }
   const CLOUDS = Array.from({length:30}, (_,i) => ({a:6 + i*4.5 + Math.random()*3, x:Math.random(), s:.6 + Math.random()*1}));
   const PAR = [.008, .022, .05], TPAR = [.12, .3, .65];
   const STREAKS = Array.from({length:44}, () => ({x:Math.random(), y:Math.random(), v:.6 + Math.random()*.9}));
@@ -1702,7 +1737,7 @@ function startSpace(){
     const dt = Math.min(.05, (now-last)/1000); last = now;
     const r = win.getBoundingClientRect();
     R = {x:r.left + r.width/2, y:r.top + r.height*.7, w:r.width, h:r.height, top:r.top, left:r.left, right:r.right, bottom:r.bottom};
-    ppp = Math.max(2.6, r.height/115);
+    ppp = Math.max(6, r.height/48);
 
     if (FX.dur > 0){
       const k = clamp((now - FX.t0)/(FX.dur*1000), 0, 1);
@@ -1712,7 +1747,7 @@ function startSpace(){
     }
     A = FX.alt;
     const zi = zoneIdx(A);
-    if (zi > FX.lastZone){ FX.lastZone = zi; if (S.phase !== "idle") SFX.zone(); }
+    if (zi > FX.lastZone){ FX.lastZone = zi; if (S.phase !== "idle"){ SFX.zone(); banner("NOW ENTERING", ZONES[zi].name.toUpperCase(), "record"); } }
     if (S.round > 0 && S.phase !== "over" && S.prevBest > 0 && !S.recordHit && A > S.prevBest){
       S.recordHit = true; banner("NEW RECORD", "You just passed your best flight", "record"); SFX.best();
     }
@@ -1892,7 +1927,8 @@ function startSpace(){
       c.lineTo(W, gy); c.closePath(); c.fill();
       c.fillStyle = "#3F7A4E"; c.fillRect(0, gy, W, H - gy + 20);
       c.fillStyle = "#336742"; c.fillRect(0, gy + 22, W, H - gy);
-      for (const tr of TREES){ const tx = tr.x*W; if (Math.abs(tx - R.x) < 70) continue; sprite(c, SPR.tree, PAL.tree, tx, gy - 6*tr.s, k*tr.s, false); }
+      for (const tr of TREES){ const tx = tr.x*W; if (Math.abs(tx - R.x) < 70) continue; sprite(c, SPR.tree, PAL.tree, tx, gy - 6*tr.s - 18, k*tr.s, false); }
+      drawFarm(c, t, W, gy + 14, k);
       const sc = rocketScale();
       c.fillStyle = "#4A5168"; c.fillRect(R.x - 34*sc, gy - 3, 68*sc, 5);
       c.strokeStyle = "#3A4360"; c.lineWidth = 2;
@@ -2428,7 +2464,7 @@ function howPane(){
       el("li",{text:"Every right answer lands in a tier: Basic 10, Common 15, Solid 30, Rare 60, Niche 85, Ultra 100 points. The fewer people who'd say it, the higher it goes."}),
       el("li",{text:"Points are altitude. 1 point = 10 km. Climb as high as you can."}),
       el("li",{text:`Every flight is 7 prompts with ${SECS} seconds each. No lives: a prompt you don't know just scores 0, and you move on. Max score is 700.`}),
-      el("li",{text:"A wrong guess costs 3 seconds, but you can keep guessing until time runs out. Don't know it? Hit SKIP to move on."}),
+      el("li",{text:"A wrong guess costs 3 seconds, but you can keep guessing until time runs out."}),
       el("li",{text:"Daily Flight: the same 7 prompts for everyone, once a day. Unlimited: 7 brand new random prompts, as often as you like."})),
     scaleBar(null),
     el("ul",{class:"rules"}, ...BANDS.map((b,i) => el("li",null, el("span",{class:"chip t"+(i+1),text:RANGES[i]}), el("span",null, el("b",{text:b.name + ". "}), document.createTextNode(b.blurb))))),
@@ -2493,7 +2529,7 @@ function renderAir(){
   const top = el("div",{class:"air-top"},
     el("span",{class:"cat",text:(S.mode === "daily" ? `Daily ${S.round}/${DAILY_N}` : daily ? `Round ${S.round}/${DAILY_N}` : "Round " + S.round) + " · " + (c.category||"Mixed")}),
     el("span",{class:"label alt",text:km(S.score) + " km"}));
-  if (S.combo >= 1) top.append(el("span",{class:"chip t4",text:"COMBO x" + S.combo}));
+  if (S.combo >= 1) top.append(el("span",{class:"chip t4",text:"STREAK x" + S.combo}));
   top.append(el("span",{class:"secs",id:"secs",text:Math.ceil(S.left)+"s"}), quit);
   air.append(top, el("h2",{class:"air-prompt",text:c.prompt}));
   if (S.phase === "result"){
@@ -2515,9 +2551,7 @@ function renderAir(){
   if (S.phase === "judging"){ inp.disabled = true; b.disabled = true; }
   inp.value = S.pending || "";
   inp.addEventListener("input", () => { if (S.pauseUntil){ S.pauseUntil = 0; paintTimer(); } schedulePrecheck(inp.value); });
-  const skip = el("button",{class:"btn ghost skip",type:"button",text: daily ? "SKIP" : `SKIP -${SKIP_COST}s`,onclick:skipPrompt});
-  if (S.phase === "judging") skip.disabled = true;
-  f.append(inp,b,skip);
+  f.append(inp,b);
   f.addEventListener("submit", e => {
     e.preventDefault();
     const v = inp.value.trim();
