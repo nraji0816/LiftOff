@@ -127,4 +127,6 @@ const seenBank = new Set();
 // "a Avengers movie" -> "an Avengers movie", "a NHL team" -> "an NHL team".
 const AN = /^(?:[AEIO]|HBO|HBCU|NHL|NBA|NFL|MLS|MLB|SEC|F1|X-Men|RPG|LA\b|8)/;
 const fixA = p => p.replace(/^Name a (\S+)/, (m, w) => AN.test(w) ? "Name an " + w : m);
-export const BANK = [...BASE, ...EXTRA].map(([p, c]) => [fixA(p), c]).filter(([p]) => { const k = p.toLowerCase().replace(/[^a-z0-9]/g, ""); if (seenBank.has(k)) return false; seenBank.add(k); return true; });
+// Only clear-cut list prompts: no situational or opinion ones ("something people do...", "a reason...").
+const CLEAR = ([p, c]) => c !== "Life" && !/^Name (something|a reason|an excuse|a thing)/i.test(p) && !/overrated|regift|forget|lose/i.test(p);
+export const BANK = [...BASE, ...EXTRA].filter(CLEAR).map(([p, c]) => [fixA(p), c]).filter(([p]) => { const k = p.toLowerCase().replace(/[^a-z0-9]/g, ""); if (seenBank.has(k)) return false; seenBank.add(k); return true; });
