@@ -128,5 +128,5 @@ const seenBank = new Set();
 const AN = /^(?:[AEIO]|HBO|HBCU|NHL|NBA|NFL|MLS|MLB|SEC|F1|X-Men|RPG|LA\b|8)/;
 const fixA = p => p.replace(/^Name a (\S+)/, (m, w) => AN.test(w) ? "Name an " + w : m);
 // Only clear-cut list prompts: no situational or opinion ones ("something people do...", "a reason...").
-const CLEAR = ([p, c]) => c !== "Life" && !/^Name (something|a reason|an excuse|a thing)/i.test(p) && !/overrated|regift|forget|lose/i.test(p);
+const CLEAR = ([p, c]) => c !== "Life" && !/^Name (something|a reason|an excuse|a thing)/i.test(p) && !/overrated|regift|forget|lose|meme|trend|slang|phrase|challenge|quote|line\b|moment|aesthetic|abbreviation|emoji|GIF|viral|outfit|term\b|tradition|tattoo|hairstyle|haircut|beard|dance move|power up|excuse/i.test(p);
 export const BANK = [...BASE, ...EXTRA].filter(CLEAR).map(([p, c]) => [fixA(p), c]).filter(([p]) => { const k = p.toLowerCase().replace(/[^a-z0-9]/g, ""); if (seenBank.has(k)) return false; seenBank.add(k); return true; });
