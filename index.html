@@ -412,6 +412,32 @@ form.answer input.shake{animation:shake .35s}
 @media (prefers-reduced-motion:reduce){.fuelg .pop{animation-duration:2.4s}.fuelg.low .tank{animation:none}}
 form.answer .skip{flex:0 0 auto;font-size:10px;padding:0 14px;background:rgba(4,8,24,.85);color:#fff;border:1px solid #cfd6ff}
 form.answer .skip:hover{border-color:var(--gold);color:var(--gold)}
+/* End of flight recap: a few quick cards, tap to advance, skip any time */
+.recap{position:fixed;inset:0;z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px;background:rgba(4,6,20,.88);backdrop-filter:blur(4px)}
+.recap[hidden]{display:none}
+.recap-card{width:min(520px,100%);min-height:300px;padding:26px 22px;text-align:center;display:flex;flex-direction:column;justify-content:center;gap:14px;cursor:pointer;animation:recapIn .35s ease-out}
+@keyframes recapIn{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.recap-card .rk{font-family:var(--f-pixel);font-size:10px;color:var(--cyan);letter-spacing:.08em}
+.recap-card .big{font-family:var(--f-pixel);font-size:clamp(28px,8vw,44px);color:#fff;line-height:1.2}
+.recap-card .big.gold{color:var(--gold)}
+.recap-card .sub{font-size:16px;opacity:.9}
+.recap-card .sub b{color:#fff}
+.recap-card .up{color:#7CFC7C}.recap-card .down{color:var(--bad)}
+.recap-hist{display:flex;align-items:flex-end;gap:4px;height:110px;margin:6px 0 2px}
+.recap-hist i{flex:1;background:rgba(255,255,255,.18);min-height:3px;border-radius:2px 2px 0 0;position:relative}
+.recap-hist i.you{background:var(--gold);box-shadow:0 0 12px var(--gold)}
+.recap-hist i.you::after{content:"YOU";position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-family:var(--f-pixel);font-size:7px;color:var(--gold)}
+.recap-axis{display:flex;justify-content:space-between;font-family:var(--f-pixel);font-size:7px;opacity:.6}
+.recap-meter{height:14px;background:rgba(255,255,255,.12);border:1px solid var(--line);position:relative;overflow:hidden}
+.recap-meter b{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--b1),var(--b4),var(--b6));animation:grow 1.1s ease-out}
+@keyframes grow{from{width:0 !important}}
+.recap-tiers{display:flex;justify-content:center;gap:6px}
+.recap-tiers span{width:26px;height:26px;border-radius:3px}
+.recap-nav{display:flex;align-items:center;gap:16px}
+.recap-dots{display:flex;gap:6px}
+.recap-dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.25)}
+.recap-dots i.on{background:var(--cyan)}
+@media (prefers-reduced-motion:reduce){.recap-card,.recap-meter b{animation:none}}
 /* phones */
 @media (max-width:520px){
   body{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
@@ -451,6 +477,10 @@ form.answer .skip:hover{border-color:var(--gold);color:var(--gold)}
 <div class="flash" id="flash" aria-hidden="true"></div>
 <div class="gate" id="nameGate" hidden><form id="gateForm" autocomplete="off"><h2>WHAT'S YOUR PILOT NAME?</h2><p>This is how you show up on the leaderboard. You can change it later.</p><input id="gateInput" maxlength="20" placeholder="Pilot name" aria-label="Pilot name"><div class="err" id="gateErr"></div><button class="btn" type="submit" id="gateBtn">CONTINUE</button></form></div>
 <div class="banner" id="banner" role="status" hidden><b id="bnTitle"></b><span id="bnSub"></span></div>
+<div class="recap" id="recap" hidden role="dialog" aria-label="Flight recap">
+  <div class="recap-card glass" id="recapCard"></div>
+  <div class="recap-nav"><div class="recap-dots" id="recapDots"></div><button type="button" class="btn ghost" id="recapSkip">SKIP RECAP</button></div>
+</div>
 <div class="transit" id="transit" hidden>
   <canvas id="tcanvas" aria-hidden="true"></canvas>
   <div class="tr-top">
@@ -1328,6 +1358,60 @@ function merged(d, run){
     updatedAt: Date.now()
   };
 }
+// ---------- recap: how this flight compares, shown as quick cards ----------
+let recapState = null;
+function showRecap(cmp){
+  if (!cmp) return;
+  const daily = S.mode === "daily", place = daily ? "today's Daily Flight" : "Unlimited flights";
+  const pct = cmp.n > 1 ? Math.round(cmp.below / (cmp.n - 1) * 100) : 100;
+  const diff = S.score - cmp.avg;
+  const valid = S.log.filter(r => r.v.valid), rarest = valid.slice().sort((a,b) => b.v.score - a.v.score)[0];
+  const cards = [];
+  cards.push(() => [el("div",{class:"rk",text: daily ? "DAILY FLIGHT COMPLETE" : "FLIGHT COMPLETE"}),
+    el("div",{class:"big",text: km(S.score) + " KM"}),
+    el("div",{class:"sub"}, document.createTextNode("You reached "), el("b",{text: ZONES[zoneIdx(S.score)].name}), document.createTextNode(` · ${valid.length} of ${S.log.length} answers scored`)),
+    el("div",{class:"recap-tiers"}, ...S.log.slice().reverse().map(r => el("span",{style:`background:${r.v.valid ? BAND_COL[r.v.tier-1] : "#FF4D6D"}`})))]);
+  if (cmp.n > 1){
+    cards.push(() => [el("div",{class:"rk",text:"YOUR RANK"}),
+      el("div",{class:"big" + (cmp.rank <= 3 ? " gold" : ""),text:"#" + cmp.rank + (cmp.tied ? " (tied)" : "")}),
+      el("div",{class:"sub"}, document.createTextNode(`out of ${cmp.n} ${daily ? "pilots today" : "recent flights"}`)),
+      el("div",{class:"recap-meter"}, el("b",{style:`width:${pct}%`})),
+      el("div",{class:"sub"}, document.createTextNode("You beat "), el("b",{text: pct + "%"}), document.createTextNode(" of " + place + (cmp.tied ? ` and tied ${cmp.tied}.` : ".")))]);
+    const you = Math.min(9, Math.floor(S.score / 70)), mx = Math.max(1, ...cmp.buckets);
+    cards.push(() => [el("div",{class:"rk",text:"YOU VS EVERYONE"}),
+      el("div",{class:"recap-hist"}, ...cmp.buckets.map((c,i) => el("i",{class: i === you ? "you" : "", style:`height:${Math.max(3, c/mx*100)}%`}))),
+      el("div",{class:"recap-axis"}, el("span",{text:"0 KM"}), el("span",{text:"3,500"}), el("span",{text:"7,000 KM"})),
+      el("div",{class:"sub"}, document.createTextNode("Average flight: "), el("b",{text: km(cmp.avg) + " km"})),
+      el("div",{class:"sub " + (diff >= 0 ? "up" : "down"),text: diff >= 0 ? `You flew ${km(diff)} km above average` : `${km(-diff)} km below average. Next one.`})]);
+  } else {
+    cards.push(() => [el("div",{class:"rk",text:"YOUR RANK"}), el("div",{class:"big gold",text:"#1"}),
+      el("div",{class:"sub",text: daily ? "You're the first pilot to finish today. Everyone else has to beat you now." : "You're one of the first pilots up. Set the bar."})]);
+  }
+  cards.push(() => [el("div",{class:"rk",text:"HIGHLIGHTS"}),
+    rarest ? el("div",{class:"sub"}, document.createTextNode("Rarest answer: "), el("b",{text: rarest.v.canonical}), document.createTextNode(` (${BANDS[rarest.v.tier-1].name}, ${rarest.v.score}/100)`)) : el("div",{class:"sub",text:"No scoring answers this time. The next one's yours."}),
+    el("div",{class:"sub"}, document.createTextNode(S.score > S.prevBest ? "New personal best!" : S.prevBest ? `Your best: ${km(S.prevBest)} km` : "First flight logged.")),
+    cmp.top ? el("div",{class:"sub"}, document.createTextNode("Top flight " + (daily ? "today" : "lately") + ": "), el("b",{text: km(cmp.top) + " km"})) : null,
+    S.runBadges.length ? el("div",{class:"sub"}, document.createTextNode("Badges earned: "), el("b",{text: String(S.runBadges.length)})) : null]);
+  recapState = {cards, i: 0, timer: null};
+  $("recap").hidden = false;
+  showRecapCard();
+}
+function showRecapCard(){
+  const st = recapState; if (!st) return;
+  if (st.i >= st.cards.length) return closeRecap();
+  clearTimeout(st.timer);
+  $("recapCard").replaceChildren(...st.cards[st.i]().filter(Boolean));
+  $("recapCard").style.animation = "none"; void $("recapCard").offsetWidth; $("recapCard").style.animation = "";
+  $("recapDots").replaceChildren(...st.cards.map((_, k) => el("i",{class: k === st.i ? "on" : ""})));
+  $("recapSkip").textContent = st.i === st.cards.length - 1 ? "DONE" : "SKIP RECAP";
+  SFX.click();
+  st.timer = setTimeout(() => { st.i++; showRecapCard(); }, reduceMotion ? 5000 : 3600);
+}
+function closeRecap(){ if (recapState) clearTimeout(recapState.timer); recapState = null; $("recap").hidden = true; }
+$("recapCard").addEventListener("click", () => { if (recapState){ recapState.i++; showRecapCard(); } });
+$("recapSkip").addEventListener("click", closeRecap);
+document.addEventListener("keydown", e => { if (recapState && e.key === "Escape") closeRecap(); });
+
 async function postRun(){
   const run = {score:S.score, races:S.round, at:Date.now(), mode:S.mode};
   if (S.ranked){
@@ -1336,6 +1420,7 @@ async function postRun(){
       const j = await api("run-end", {runId: S.runId, badges: S.runBadges});
       myDoc = j.player;
       await refreshBoard();
+      if (S.page === "results") showRecap(j.compare);
       toast(S.score > 0 && S.score >= (myDoc.best || 0) ? "New personal best. It's on the leaderboard." : "Flight posted to the leaderboard.");
       return;
     } catch(e){ toast("Couldn't post this flight. Saved on this device instead."); }
