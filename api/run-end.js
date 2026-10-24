@@ -20,5 +20,15 @@ export default route(["POST"], async ({req, body}) => {
     Object.assign(patch, {daily_date: t, daily_score: run.score, daily_rounds: run.rounds, daily_grid: gridOf(run.log || []),
       daily_streak: p.last_daily === t ? (p.daily_streak || 1) : p.last_daily === yesterday() ? (p.daily_streak || 0) + 1 : 1, last_daily: t});
   }
-  return {player: publicPlayer(await store.updatePlayer(p.id, patch))};
+  const player = publicPlayer(await store.updatePlayer(p.id, patch));
+  // How this flight stacks up: rank, percentile, average and a spread of scores for the recap.
+  let compare = null;
+  try {
+    const scores = await store.flightScores(run.mode, daily ? run.daily_date : null);
+    const n = scores.length, below = scores.filter(x => x < run.score).length, above = scores.filter(x => x > run.score).length;
+    const avg = n ? Math.round(scores.reduce((a, b) => a + b, 0) / n) : 0;
+    const buckets = Array(10).fill(0); for (const x of scores) buckets[Math.min(9, Math.floor(x / 70))]++;
+    compare = {n, below, tied: Math.max(0, n - below - above - 1), rank: above + 1, avg, top: n ? Math.max(...scores) : 0, buckets, scope: daily ? "today" : "unlimited"};
+  } catch {}
+  return {player, compare};
 });

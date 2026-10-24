@@ -98,6 +98,12 @@ export const store = {
     const {data} = await sb(`runs?player_id=eq.${enc(playerId)}&select=issued&order=created_at.desc&limit=${n}`);
     return (data || []).flatMap(r => r.issued || []);
   },
+  // Scores of finished flights to compare against: today's Daily, or recent Unlimited flights.
+  async flightScores(mode, day, limit = 3000){
+    if (MOCK) return [...mem.runs.values()].filter(r => r.finished && r.mode === mode && (!day || r.daily_date === day)).map(r => r.score || 0);
+    const q = `runs?finished=eq.true&mode=eq.${mode}` + (day ? `&daily_date=eq.${day}` : "") + `&select=score&order=created_at.desc&limit=${limit}`;
+    const {data} = await sb(q); return (data || []).map(r => r.score || 0);
+  },
   async countRunsSince(playerId, iso){
     if (MOCK) return [...mem.runs.values()].filter(r => r.player_id === playerId && r.created_at >= iso).length;
     const {headers} = await sb(`runs?player_id=eq.${enc(playerId)}&created_at=gte.${enc(iso)}&select=id`, {headers:{Prefer:"count=exact", Range:"0-0"}});
