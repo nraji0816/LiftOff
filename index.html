@@ -410,6 +410,8 @@ form.answer input.shake{animation:shake .35s}
 .fuel-legend span{font-family:var(--f-pixel);font-size:8px;text-align:center;padding:5px 2px;color:#0b0f2a;border-radius:2px}
 .fuel-legend-label{font-family:var(--f-pixel);font-size:8px;color:#fff;text-align:center;margin-top:8px;text-shadow:0 1px 0 #000}
 @media (prefers-reduced-motion:reduce){.fuelg .pop{animation-duration:2.4s}.fuelg.low .tank{animation:none}}
+form.answer .skip{flex:0 0 auto;font-size:10px;padding:0 14px;background:rgba(4,8,24,.85);color:#fff;border:1px solid #cfd6ff}
+form.answer .skip:hover{border-color:var(--gold);color:var(--gold)}
 /* phones */
 @media (max-width:520px){
   body{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
@@ -428,6 +430,9 @@ form.answer input.shake{animation:shake .35s}
   form.answer{gap:8px;flex-wrap:nowrap}
   form.answer input{flex:1 1 0;padding:12px 12px;font-size:17px}
   form.answer .btn{width:auto;flex:0 0 auto;padding-left:16px;padding-right:16px}
+  form.answer{flex-wrap:wrap}
+  form.answer input{flex:1 1 0}
+  form.answer .skip{flex:1 1 100%;order:3;padding:9px 0}
   #nextBtn{margin-bottom:18px}
   .sumpanel{padding:14px;top:8px;max-height:calc(100% - 16px)}
   .gate form{padding:18px}
@@ -512,26 +517,26 @@ const BADGES = [
   {id:"ultra",    name:"Ultra Niche",    how:"Score 91 or more on one answer"},
   {id:"combo3",   name:"Combo x3",       how:"Score 56+ three answers in a row"},
   {id:"flawless", name:"Flawless Five",  how:"Get 5 right answers in a row"},
-  {id:"mechanic", name:"Topped Off",     how:"Refuel to a full tank"},
+  {id:"mechanic", name:"No Misses",      how:"Score on all 7 prompts in an Unlimited flight"},
   {id:"orbit",    name:"Orbit",          how:"Reach 2,500 km in one flight"},
   {id:"moon",     name:"Moonshot",       how:"Reach 5,000 km in one flight"},
-  {id:"deep",     name:"Deep Space",     how:"Reach 9,000 km in one flight"},
+  {id:"deep",     name:"Deep Space",     how:"Reach 5,500 km in one flight"},
   {id:"frequent", name:"Frequent Flyer", how:"Fly 10 flights"},
   {id:"rare1",    name:"Rare Find",      how:"Score 56 or more on one answer"},
   {id:"niche1",   name:"Niche Pick",     how:"Score 76 or more on one answer"},
   {id:"perfect",  name:"Perfect 100",    how:"Score exactly 100 on one answer"},
   {id:"hattrick", name:"Hat Trick",      how:"Get 3 Ultra niche answers in one flight"},
   {id:"combo5",   name:"Combo x5",       how:"Score 56+ five answers in a row"},
-  {id:"flawless10", name:"Flawless Ten", how:"Get 10 right answers in a row"},
+  {id:"flawless10", name:"Deep Diver",   how:"Get 3 Niche or better answers in one flight"},
   {id:"quick",    name:"Quick Draw",     how:"Get one right within 5 seconds"},
   {id:"clutch",   name:"Clutch",         how:"Score with 2 seconds or less left"},
   {id:"proof",    name:"Proofreader",    how:"Fix a spelling slip and still score"},
-  {id:"comeback", name:"Fumes",          how:"Score Rare or better with under 5 seconds of fuel"},
-  {id:"marathon", name:"Marathon",       how:"Play 20 rounds in one Unlimited flight"},
+  {id:"comeback", name:"Buzzer Beater",  how:"Score Rare or better with under 5 seconds left"},
+  {id:"marathon", name:"High Flyer",     how:"Score 450+ in an Unlimited flight"},
   {id:"clouds",   name:"Cloud Hopper",   how:"Reach 250 km in one flight"},
   {id:"strato",   name:"Stratosphere",   how:"Reach 1,000 km in one flight"},
-  {id:"interstellar", name:"Interstellar", how:"Reach 15,000 km in one flight"},
-  {id:"voyager",  name:"Voyager",        how:"Reach 25,000 km in one flight"},
+  {id:"interstellar", name:"Interstellar", how:"Reach 6,000 km in one flight"},
+  {id:"voyager",  name:"One in a Million", how:"Reach 6,500 km in one flight"},
   {id:"clean",    name:"Clean Sweep",    how:"Finish a Daily Flight with no misses"},
   {id:"dailyace", name:"Daily Ace",      how:"Fly 4,000 km in one Daily Flight"},
   {id:"topday",   name:"Top of the Day", how:"Finish a Daily Flight in first place"},
@@ -541,7 +546,7 @@ const BADGES = [
   {id:"acepilot", name:"Ace Pilot",      how:"Fly 50 flights"},
   {id:"mileage",  name:"Mileage Club",   how:"Fly 50,000 km all time"}
 ];
-const RANGES = ["10 pts","20 pts","35 pts","60 pts","85 pts","100 pts"];
+const RANGES = ["10 pts","15 pts","30 pts","60 pts","85 pts","100 pts"];
 const BAND_COL = ["#FF8A3D","#F5C842","#C9E04B","#7ED957","#2FBF5F","#3DFF8F"];
 const bandOf = s => { let i = 0; BANDS.forEach((b,k) => { if (s >= b.min) i = k; }); return i + 1; };
 const ZONES = [{a:0,name:"Launch pad"},{a:25,name:"Clouds"},{a:100,name:"Stratosphere"},{a:250,name:"Orbit"},{a:500,name:"The Moon"},{a:900,name:"Deep space"}];
@@ -550,9 +555,12 @@ const BOOK_RANGE = [[4,15],[18,40],[45,72],[78,98]];
 const bookScore = (t,i,n) => { const [lo,hi] = BOOK_RANGE[t]; return Math.round(lo + (hi-lo) * (n>1 ? i/(n-1) : .5)); };
 const LIVES = 3, SECS = 25;
 // Points per tier, and Unlimited's fuel tank (seconds). Fuel drains while a prompt is up; right answers refuel by tier.
-const TIER_PTS = [10, 20, 35, 60, 85, 100];
+const TIER_PTS = [10, 15, 30, 60, 85, 100];
 const FUEL_START = 45, FUEL_TANK = 60, REFUEL = [4, 6, 8, 11, 14, 18];
-const WRONG_COST = {daily: 3, endless: 2};
+const WRONG_COST = {daily: 3, endless: 3}, SKIP_COST = 5;
+// Every flight works like a Krillion dive: 7 prompts, 25 seconds each, no lives. The fuel system is switched off.
+const FUEL_MODE = false;
+const fuelRun = () => FUEL_MODE && S.mode !== "daily";
 // A wide pool of everyday categories plus pop culture and trends; a batch takes two or three pop culture ones.
 const THEMES = [
   {label:"Food", hint:"dishes, snacks, comfort food, cuisines"},
@@ -897,7 +905,7 @@ Rules: starts with "Name a", "Name an" or "Name something"; no real private peop
 
 async function refill(wait){
   if (S.mode === "daily") return;
-  if (S.queue.length >= 3) return;
+  if (S.queue.length >= 3 || (!fuelRun() && S.round + S.queue.length >= DAILY_N)) return;
   if (!S.ranked) { S.queue.push(...offlineBatch()); return; }
   if (!fetching){
     fetching = api("prompts", {runId: S.runId, avoid: [...seenAll().slice(-280), ...S.seen.slice(-20)]})
@@ -941,7 +949,7 @@ async function startDaily(){
   }
 }
 
-const runOver = () => S.mode === "daily" ? S.round >= DAILY_N : S.fuelOut;
+const runOver = () => fuelRun() ? S.fuelOut : S.round >= DAILY_N;
 
 function nextRound(){
   if (runOver()) return endRun();
@@ -952,8 +960,8 @@ function nextRound(){
   S.current = S.queue.shift();
   S.seen.push(S.current.prompt);
   if (S.mode !== "daily") markSeen(S.current.prompt);
-  S.round++; S.left = S.mode === "daily" ? SECS : S.fuel; S.roundStart = S.left; S.verdict = null; S.phase = "play";
-  if (S.mode !== "daily" && S.left < 10){ banner("LOW FUEL", Math.ceil(S.left) + " seconds left in the tank", "warn"); SFX.warn(); }
+  S.round++; S.left = fuelRun() ? S.fuel : SECS; S.roundStart = S.left; S.verdict = null; S.phase = "play";
+  if (fuelRun() && S.left < 10){ banner("LOW FUEL", Math.ceil(S.left) + " seconds left in the tank", "warn"); SFX.warn(); }
   S.bounce = null; S.bounced = {}; S.prechecks = {}; S.precheckN = 0; S.expired = false; S.pending = ""; S.pauseUntil = 0; S.pauseBudget = 12000;
   prepList(S.current); S.queue.slice(0,2).forEach(prepList);
   renderAll();
@@ -1081,7 +1089,7 @@ async function submit(ans){
     judgeServer(ans).then(r => {
       if (S.runId !== runId || !r || !r.state) return;
       S.score = r.state.score; S.combo = r.state.combo;
-      if (r.state.over && S.mode !== "daily") S.fuelOut = true;
+      if (r.state.over && fuelRun()) S.fuelOut = true;
       if (S.page === "play") renderAll();
     }).catch(() => {});
     return finish(ans, fast);
@@ -1123,11 +1131,20 @@ function refocus(){
   if (!reduceMotion){ inp.classList.remove("shake"); void inp.offsetWidth; inp.classList.add("shake"); }
 }
 
+// Don't know this one? Skip it. Unlimited charges a little fuel; Daily just scores the round 0.
+function skipPrompt(){
+  if (S.phase !== "play" || S.page !== "play") return;
+  SFX.click();
+  const spent = spentNow();
+  if (fuelRun()){ S.left = Math.max(0, S.left - SKIP_COST); fuelPop("-" + SKIP_COST + "s", "loss", "SKIPPED"); }
+  if (S.ranked){ const body = {runId: S.runId, prompt: S.current.prompt, answer: null, skip: true, spent}; queueJudge(() => api("judge", body)).catch(() => {}); }
+  finish(null, {valid:false, skipped:true, note:"Skipped."});
+}
 function finish(ans, v){
   clearInterval(S.timer);
   if (S.page !== "play" || (S.phase !== "play" && S.phase !== "judging")) return;
-  if (S.mode !== "daily") S.fuel = S.left;
-  if (ans == null) {
+  if (fuelRun()) S.fuel = S.left;
+  if (ans == null && !(v && v.skipped)) {
     v = {valid:false, timeout:true, note:"Time ran out."};
     if (S.current.book) { v.common = S.current.book[0].slice(0,4).map(titleCase); v.rare = titleCase(S.current.book[3][0]); }
     if (S.ranked){ const body = {runId: S.runId, prompt: S.current.prompt, answer: null, spent: Math.round((S.roundStart || 0) * 1000)}; queueJudge(() => api("judge", body)).catch(() => {}); }
@@ -1138,20 +1155,20 @@ function finish(ans, v){
     v.tier = bandOf(v.score);
     S.combo = v.score >= 56 ? S.combo + 1 : 0;
     v.combo = S.combo;
-    v.bonus = S.combo >= 2 ? Math.min(30, (S.combo - 1)*10) : 0;
+    v.bonus = 0;
     v.base = TIER_PTS[v.tier - 1];
     v.pts = v.base + v.bonus;
     S.maxCombo = Math.max(S.maxCombo, S.combo);
     S.clean++;
     v.leftAt = S.left; v.usedSecs = (S.roundStart || 0) - S.left;
-    if (S.mode !== "daily"){
+    if (fuelRun()){
       v.refuel = REFUEL[v.tier - 1];
       S.left = Math.min(FUEL_TANK, S.left + v.refuel); S.fuel = S.left;
       if (S.left >= FUEL_TANK) v.fullTank = true;
       fuelPop("+" + v.refuel + "s", "gain", BANDS[v.tier-1].name.toUpperCase() + " REFUEL");
     }
     S.score += v.pts;
-    if (v.state){ S.score = v.state.score; S.combo = v.state.combo; if (v.state.over && S.mode !== "daily") S.fuelOut = true; }
+    if (v.state){ S.score = v.state.score; S.combo = v.state.combo; if (v.state.over && fuelRun()) S.fuelOut = true; }
     S.bestPick = Math.max(S.bestPick, v.score);
     if (v.tier === 6) S.jackpots++;
     const dur = FX.scored(v.pts, v.tier, S.score);
@@ -1165,29 +1182,32 @@ function finish(ans, v){
     if (S.clean >= 5) award("flawless");
     if (S.score >= 250) award("orbit");
     if (S.score >= 500) award("moon");
-    if (S.score >= 900) award("deep");
+    if (S.score >= 550) award("deep");
     if (v.score >= 56) award("rare1");
     if (v.score >= 76) award("niche1");
     if (v.score === 100) award("perfect");
     if (S.jackpots >= 3) award("hattrick");
     if (S.combo >= 5) award("combo5");
-    if (S.clean >= 10) award("flawless10");
+    if (S.log.filter(r => r.v.valid && r.v.score >= 76).length + (v.score >= 76 ? 1 : 0) >= 3) award("flawless10");
     if (v.usedSecs <= 5) award("quick");
     if (v.leftAt <= 2) award("clutch");
     if (Object.values(S.bounced || {}).some(b => b.kind === "typo")) award("proof");
-    if (S.mode !== "daily" && v.leftAt < 5 && v.score >= 56) award("comeback");
+    if (v.leftAt < 5 && v.score >= 56) award("comeback");
     if (S.score >= 25) award("clouds");
     if (S.score >= 100) award("strato");
-    if (S.score >= 1500) award("interstellar");
-    if (S.score >= 2500) award("voyager");
+    if (S.score >= 600) award("interstellar");
+    if (S.score >= 650) award("voyager");
   } else {
     v.pts = 0; S.combo = 0; S.clean = 0;
-    if (S.mode !== "daily" && !v.error){ S.fuelOut = true; S.fuel = 0; S.left = 0; }
+    if (fuelRun() && !v.error){
+      if (v.skipped && S.left > 0) S.fuel = S.left;
+      else { S.fuelOut = true; S.fuel = 0; S.left = 0; }
+    }
     if (v.state){ S.score = v.state.score; }
-    FX.missed("MISS");
-    v.timeout ? SFX.timeout() : SFX.miss();
+    FX.missed(v.skipped ? "SKIP" : "MISS");
+    v.timeout ? SFX.timeout() : v.skipped ? SFX.click() : SFX.miss();
     flash("");
-    if (S.mode !== "daily" && S.fuelOut){ banner("OUT OF FUEL", "The tank ran dry. Flight over.", "warn"); SFX.warn(); }
+    if (fuelRun() && S.fuelOut){ banner("OUT OF FUEL", "The tank ran dry. Flight over.", "warn"); SFX.warn(); }
   }
   S.log.unshift({n:S.round, prompt:S.current.prompt, v});
   S.verdict = v; S.phase = "result"; S.bounce = null; S.revealed = false;
@@ -1228,12 +1248,13 @@ async function endRun(){
   if (S.phase === "over") return;
   clearInterval(S.timer);
   award("first");
+  if (S.mode !== "daily" && S.round >= DAILY_N && S.log.every(r => r.v.valid)) award("mechanic");
   const st = myStats(), runs = (st.runs || 0) + 1;
   if (runs >= 10) award("frequent");
   if (runs >= 25) award("veteran");
   if (runs >= 50) award("acepilot");
   if ((st.total || 0) + S.score >= 5000) award("mileage");
-  if (S.mode !== "daily" && S.round >= 20) award("marathon");
+  if (S.mode !== "daily" && S.score >= 450) award("marathon");
   if (S.mode === "daily" && S.round >= DAILY_N){
     if (S.log.every(r => r.v.valid || r.v.error)) award("clean");
     if (S.score >= 400) award("dailyace");
@@ -1953,7 +1974,7 @@ function playTransit(round){
     const eng = $("trEng"); eng.replaceChildren();
     eng.append(el("span",{class:"lnum",text:`Fuel ${Math.ceil(S.fuel)}s`}));
     eng.setAttribute("aria-label", Math.ceil(S.fuel) + " seconds of fuel");
-    if (S.mode === "daily"){ eng.replaceChildren(el("span",{class:"lnum",text:`Round ${round} of ${DAILY_N}`})); eng.setAttribute("aria-label", `Round ${round} of ${DAILY_N}`); }
+    if (!fuelRun()){ eng.replaceChildren(el("span",{class:"lnum",text:`Round ${round} of ${DAILY_N}`})); eng.setAttribute("aria-label", `Round ${round} of ${DAILY_N}`); }
     $("trCount").textContent = "";
     ov.hidden = false; requestAnimationFrame(() => ov.classList.add("show"));
     const GO = reduceMotion ? 1.0 : 1.95, END = reduceMotion ? 1.5 : 3.15, beat = GO/3;
@@ -2081,7 +2102,7 @@ const livesText = n => n === 1 ? "1 life left" : n + " lives left";
 
 function paintFuel(){
   const g = $("fuelG"); if (!g) return;
-  const on = S.page === "play" && S.mode !== "daily" && S.phase !== "over";
+  const on = S.page === "play" && fuelRun() && S.phase !== "over";
   g.hidden = !on; if (!on) return;
   const left = (S.phase === "play" || S.phase === "judging") ? S.left : S.fuel;
   $("fuelFill").style.height = Math.max(0, Math.min(100, left / FUEL_TANK * 100)) + "%";
@@ -2090,7 +2111,7 @@ function paintFuel(){
 }
 // A big "+11s" or "-2s" next to the tank so you can see exactly what an answer did.
 function fuelPop(text, kind, sub){
-  if (S.mode === "daily") return;
+  if (!fuelRun()) return;
   const g = $("fuelG"), box = $("fuelPops"); if (!g || !box) return;
   const p = el("div",{class:"pop " + kind}, document.createTextNode(text), sub ? el("small",{text:sub}) : null);
   box.append(p); setTimeout(() => p.remove(), 1700);
@@ -2101,17 +2122,17 @@ function paintTimer(){
   paintFuel();
   const t = $("timer"); if (!t) return;
   const paused = S.phase === "judging" || Date.now() < (S.pauseUntil || 0);
-  const full = S.mode === "daily" ? SECS : FUEL_TANK;
+  const full = fuelRun() ? FUEL_TANK : SECS;
   t.firstChild.style.transform = `scaleX(${Math.min(1, S.left/full)})`;
-  t.classList.toggle("fuel", S.mode !== "daily");
+  t.classList.toggle("fuel", fuelRun());
   t.classList.toggle("low", S.left < 6 && !paused);
   t.classList.toggle("paused", paused);
   const c = $("secs");
-  if (c){ const pre = S.mode === "daily" ? "" : "FUEL "; c.textContent = (paused ? "PAUSED " : pre) + Math.ceil(S.left) + "s"; c.classList.toggle("low", S.left < 6 && !paused); c.classList.toggle("paused", paused); }
+  if (c){ const pre = fuelRun() ? "FUEL " : ""; c.textContent = (paused ? "PAUSED " : pre) + Math.ceil(S.left) + "s"; c.classList.toggle("low", S.left < 6 && !paused); c.classList.toggle("paused", paused); }
 }
 
 function tierChip(v){
-  if (!v.valid) return el("span",{class:"chip bad",text: v.timeout ? "NO ANSWER" : v.error ? "NO SCORE" : "MISS"});
+  if (!v.valid) return el("span",{class:"chip bad",text: v.skipped ? "SKIPPED" : v.timeout ? "NO ANSWER" : v.error ? "NO SCORE" : "MISS"});
   return el("span",{class:"chip t"+v.tier,text:BANDS[v.tier-1].name.toUpperCase()});
 }
 
@@ -2175,7 +2196,7 @@ function goals(){
 }
 
 function roundSummary(){
-  const v = S.verdict, c = S.current, daily = S.mode === "daily";
+  const v = S.verdict, c = S.current, daily = !fuelRun();
   const w = el("div",{class:"summary"});
   w.append(el("div",{class:"sum-head"}, el("span",{class:"label",text: daily ? `Round ${S.round} of ${DAILY_N} complete` : "Round " + S.round + " complete"}), el("span",{class:"cat",text:c.category || "Mixed"})));
   w.append(el("p",{class:"sum-prompt",text:c.prompt}));
@@ -2192,12 +2213,12 @@ function roundSummary(){
     bd.append(el("div",{class:"brow total"}, el("span",{text:"This round"}), el("b",{text:`${v.pts} pts = +${km(v.pts)} km`})));
     w.append(bd);
   } else if (!v.error){
-    w.append(el("p",{class:"sum-miss",text: daily ? (v.timeout ? "No answer in time. No points this round." : "That doesn't fit the category. No points this round.") : (v.timeout ? "Out of fuel. That's the end of the flight." : "No points this round.")}));
+    w.append(el("p",{class:"sum-miss",text: daily ? (v.skipped ? "Skipped. No points this round." : v.timeout ? "No answer in time. No points this round." : "That doesn't fit the category. No points this round.") : (v.skipped ? (S.fuelOut ? "Skipped, and that emptied the tank. Flight over." : `Skipped for ${SKIP_COST}s of fuel. No points this round.`) : v.timeout ? "Out of fuel. That's the end of the flight." : "No points this round.")}));
   }
   w.append(el("div",{class:"tiles"},
     daily ? tile("Rounds left", el("div",{class:"v",text:String(DAILY_N - S.round)}), "of " + DAILY_N)
           : tile("Fuel", el("div",{class:"v",text: Math.ceil(S.fuel) + "s"}), v.refuel ? `+${v.refuel}s refuel · tank holds ${FUEL_TANK}s` : `tank holds ${FUEL_TANK}s`, S.fuel < 10 ? "last" : ""),
-    tile("Combo", el("div",{class:"v",text: S.combo >= 2 ? "x" + S.combo : S.combo === 1 ? "x1" : "–"}), S.combo >= 1 ? "Next Rare+ adds +" + Math.min(30, S.combo*10) : "Rare or better starts one"),
+    tile("Streak", el("div",{class:"v",text: S.combo >= 2 ? "x" + S.combo : S.combo === 1 ? "x1" : "–"}), S.combo >= 1 ? "Rare or better in a row" : "Rare or better starts a streak"),
     tile("Altitude", el("div",{class:"v",text: km(S.score)}), "km · " + ZONES[zoneIdx(S.score)].name)
   ));
   w.append(el("div",{class:"goals"}, ...goals()));
@@ -2243,7 +2264,7 @@ function flightSummary(){
   w.append(el("div",{class:"tiles"},
     tile("Avg answer", el("div",{class:"v",text:avg}), "out of 100"),
     tile("Best pick", el("div",{class:"v",text:S.bestPick}), "out of 100"),
-    tile("Best combo", el("div",{class:"v",text: S.maxCombo ? "x" + S.maxCombo : "–"}), S.jackpots + " Ultra niche")
+    tile("Best streak", el("div",{class:"v",text: S.maxCombo ? "x" + S.maxCombo : "–"}), S.jackpots + " Ultra niche")
   ));
   const fresh = S.runBadges.map(id => BADGES.find(b => b.id === id)).filter(Boolean);
   if (fresh.length) w.append(el("div",{class:"newbadges"}, el("div",{class:"label",text:"Badges unlocked"}), el("div",{class:"badges"}, ...fresh.map(b => el("span",{class:"badge on",text:b.name.toUpperCase(),title:b.how})))));
@@ -2317,8 +2338,8 @@ function lobbyPane(){
   if (streak) daily.append(el("p",{class:"streak"}, el("b",{text:streak + (streak === 1 ? " DAY" : " DAYS")}), document.createTextNode(" daily streak. Fly today to keep it.")));
   w.append(daily);
   w.append(el("section",{class:"mode-card"},
-    el("div",null, el("div",{class:"label",text:"Unlimited flight"}), el("h3",{text:"FUEL RUN · ENDLESS PROMPTS"}),
-      el("p",{class:"vnote",text:`You start with ${FUEL_START} seconds of fuel. It burns while you think. Every right answer refuels you, and rarer answers refuel more. Fly until the tank runs dry.`})),
+    el("div",null, el("div",{class:"label",text:"Unlimited flight"}), el("h3",{text:"7 RANDOM PROMPTS · PLAY ANYTIME"}),
+      el("p",{class:"vnote",text:"A fresh flight of 7 brand new prompts every time, same rules as the Daily. Play as many as you want and chase your best score on the board."})),
     el("button",{class:"btn primary",type:"button",text:"LAUNCH UNLIMITED",onclick:launchUnlimited})));
   w.append(el("p",{class:"toast lobby-toast",id:"myToast",text:S.toastMsg || ""}));
   w.append(modeLine());
@@ -2373,7 +2394,7 @@ function statsPane(){
     tile("Daily streak", el("div",{class:"v",text:String(currentStreak(st))}), currentStreak(st) === 1 ? "day" : "days"),
     tile("Ultra niche", el("div",{class:"v",text:String(st.jackpots||0)}), "answers 91+"),
     tile("Best pick", el("div",{class:"v",text:String(st.bestPick||st.bestStreak||0)}), "out of 100"),
-    tile("Best combo", el("div",{class:"v",text: st.bestCombo ? "x" + st.bestCombo : "–"}), "56+ in a row"),
+    tile("Best streak", el("div",{class:"v",text: st.bestCombo ? "x" + st.bestCombo : "–"}), "Rare+ in a row"),
     tile("Today", el("div",{class:"v",text: st.daily && st.daily.date === todayKey() ? km(st.daily.score) : "–"}), "daily km")));
   w.append(el("div",{class:"label badges-label",text:`Badges · ${[...have].filter(id => BADGES.some(x => x.id === id)).length} of ${BADGES.length}`}));
   w.append(el("div",{class:"badge-grid"}, ...[...BADGES].sort((a,b) => (have.has(b.id) ? 1 : 0) - (have.has(a.id) ? 1 : 0)).map(b => el("div",{class:"badge-card" + (have.has(b.id) ? " on" : "")}, el("b",{text:b.name.toUpperCase()}), el("span",{text:b.how})))));
@@ -2398,11 +2419,11 @@ function howPane(){
   w.append(el("h2",{class:"page-title",text:"HOW TO PLAY"}),
     el("ol",{class:"howto"},
       el("li",{text:"Name one real thing in the category. Exact answers only: spelling counts, capitals and plurals don't."}),
-      el("li",{text:"Every right answer lands in a tier: Basic 10, Common 20, Solid 35, Rare 60, Niche 85, Ultra 100 points. The fewer people who'd say it, the higher it goes."}),
+      el("li",{text:"Every right answer lands in a tier: Basic 10, Common 15, Solid 30, Rare 60, Niche 85, Ultra 100 points. The fewer people who'd say it, the higher it goes."}),
       el("li",{text:"Points are altitude. 1 point = 10 km. Climb as high as you can."}),
-      el("li",{text:`Daily Flight: 7 prompts, the same for everyone, ${SECS} seconds each. A wrong guess costs 3 seconds, but you can keep guessing.`}),
-      el("li",{text:`Unlimited: a fuel run. You start with ${FUEL_START}s of fuel and it burns while a prompt is up. Right answers refuel you (Basic +4s up to Ultra +18s, tank holds ${FUEL_TANK}s). A wrong guess burns 2s. When the tank hits zero, the flight is over.`}),
-      el("li",{text:"Combo: Rare or better answers back to back add +10, then +20, then +30 bonus points."})),
+      el("li",{text:`Every flight is 7 prompts with ${SECS} seconds each. No lives: a prompt you don't know just scores 0, and you move on. Max score is 700.`}),
+      el("li",{text:"A wrong guess costs 3 seconds, but you can keep guessing until time runs out. Don't know it? Hit SKIP to move on."}),
+      el("li",{text:"Daily Flight: the same 7 prompts for everyone, once a day. Unlimited: 7 brand new random prompts, as often as you like."})),
     scaleBar(null),
     el("ul",{class:"rules"}, ...BANDS.map((b,i) => el("li",null, el("span",{class:"chip t"+(i+1),text:RANGES[i]}), el("span",null, el("b",{text:b.name + ". "}), document.createTextNode(b.blurb))))),
     el("h3",{class:"sub-title",text:"EXACT ANSWERS"}),
@@ -2456,7 +2477,7 @@ function renderAir(){
     return;
   }
   if (S.phase === "result" && S.revealed) return;
-  const daily = S.mode === "daily";
+  const daily = !fuelRun();
   const quit = el("button",{type:"button",class:"quit",text:"END FLIGHT"});
   quit.addEventListener("click", () => {
     if (Date.now() - (S.quitArm || 0) < 3000){ endRun(); return; }
@@ -2464,7 +2485,7 @@ function renderAir(){
     setTimeout(() => { if (quit.isConnected) quit.textContent = "END FLIGHT"; }, 3000);
   });
   const top = el("div",{class:"air-top"},
-    el("span",{class:"cat",text:(daily ? `Daily ${S.round}/${DAILY_N}` : "Round " + S.round) + " · " + (c.category||"Mixed")}),
+    el("span",{class:"cat",text:(S.mode === "daily" ? `Daily ${S.round}/${DAILY_N}` : daily ? `Round ${S.round}/${DAILY_N}` : "Round " + S.round) + " · " + (c.category||"Mixed")}),
     el("span",{class:"label alt",text:km(S.score) + " km"}));
   if (S.combo >= 1) top.append(el("span",{class:"chip t4",text:"COMBO x" + S.combo}));
   top.append(el("span",{class:"secs",id:"secs",text:Math.ceil(S.left)+"s"}), quit);
@@ -2477,7 +2498,7 @@ function renderAir(){
       el("div",{class:"air-pts",text: v.valid ? "+" + v.pts + " pts" : "0 pts"}),
       v.bonus ? el("div",{class:"air-bonus",text:`+${v.bonus} combo bonus`}) : null,
       v.refuel ? el("div",{class:"air-life",text:`+${v.refuel}s fuel · ${Math.ceil(S.fuel)}s in the tank`}) : null,
-      !v.valid && !v.error && !daily ? el("div",{class:"air-lost",text:"Out of fuel"}) : null,
+      !v.valid && !v.error && !daily ? el("div",{class:"air-lost",text: v.skipped && !S.fuelOut ? `Skipped · -${SKIP_COST}s fuel` : "Out of fuel"}) : null,
       v.note ? el("p",{class:"air-note",text:v.note}) : null));
     return;
   }
@@ -2488,7 +2509,9 @@ function renderAir(){
   if (S.phase === "judging"){ inp.disabled = true; b.disabled = true; }
   inp.value = S.pending || "";
   inp.addEventListener("input", () => { if (S.pauseUntil){ S.pauseUntil = 0; paintTimer(); } schedulePrecheck(inp.value); });
-  f.append(inp,b);
+  const skip = el("button",{class:"btn ghost skip",type:"button",text: daily ? "SKIP" : `SKIP -${SKIP_COST}s`,onclick:skipPrompt});
+  if (S.phase === "judging") skip.disabled = true;
+  f.append(inp,b,skip);
   f.addEventListener("submit", e => {
     e.preventDefault();
     const v = inp.value.trim();
