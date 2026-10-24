@@ -21,7 +21,7 @@ export default route(["POST"], async ({req, body}) => {
   // A wrong answer doesn't end the round. The player keeps guessing until time runs out.
   if (verdict.status === "invalid" && answer != null) return {status:"bounce", kind:"wrong", note: verdict.note || "Not accepted."};
 
-  const {run: next, state} = applyRound(run, prompt, answer, verdict);
+  const {run: next, state} = applyRound(run, prompt, answer, verdict, body.spent);
   await store.updateRun(run.id, {answered: next.answered, log: next.log, rounds: next.rounds, score: next.score, lives: next.lives,
     combo: next.combo, max_combo: next.max_combo, clean: next.clean, jackpots: next.jackpots, best_pick: next.best_pick,
     ...(addIssued ? {issued: [...issued, prompt].slice(-400)} : {})});

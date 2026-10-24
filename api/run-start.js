@@ -1,5 +1,5 @@
 // POST {playerId, token, mode:"daily"|"unlimited"} -> {runId, prompts?}
-import { route, auth, store, today, runsToday, MAX_RUNS_PER_PLAYER_PER_DAY, HttpError, LIVES } from "./_lib.js";
+import { route, auth, store, today, runsToday, MAX_RUNS_PER_PLAYER_PER_DAY, HttpError, LIVES, FUEL_START } from "./_lib.js";
 import { dailyPrompts } from "./daily.js";
 
 export default route(["POST"], async ({req, body}) => {
@@ -15,6 +15,6 @@ export default route(["POST"], async ({req, body}) => {
       throw e;
     }
   }
-  const run = await store.insertRun({player_id: p.id, mode: "unlimited", daily_date: null, lives: LIVES, issued: []});
+  const run = await store.insertRun({player_id: p.id, mode: "unlimited", daily_date: null, lives: FUEL_START, issued: []});
   return {runId: run.id};
 });

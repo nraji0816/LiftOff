@@ -10,6 +10,11 @@ const MAX_AI_CALLS_PER_DAY = Number(env.MAX_AI_CALLS_PER_DAY || 4000);
 const MAX_REQUESTS_PER_IP_PER_DAY = Number(env.MAX_REQUESTS_PER_IP_PER_DAY || 1500);
 const MAX_RUNS_PER_PLAYER_PER_DAY = Number(env.MAX_RUNS_PER_PLAYER_PER_DAY || 60);
 export const LIVES = 3, DAILY_N = 7, SECS = 25;
+// Points per tier (Basic, Common, Solid, Rare, Niche, Ultra), like a depth gauge with fixed steps.
+export const TIER_PTS = [10, 20, 35, 60, 85, 100];
+// Unlimited runs on fuel (stored in the run's "lives" column, in milliseconds): it drains while a prompt is up,
+// right answers refuel by tier, and the flight ends when the tank hits zero.
+export const FUEL_START = 45000, FUEL_TANK = 60000, REFUEL = [4000, 6000, 8000, 11000, 14000, 18000];
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const yesterday = () => new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -467,27 +472,36 @@ export const gridOf = log => log.map(r => r.valid ? EMO[bandOf(r.score)-1] : MIS
 export const runOver = run => run.mode === "daily" ? run.rounds >= DAILY_N : run.lives <= 0;
 
 // Apply one judged round to a run and return the new run fields plus what the page needs to show.
-export function applyRound(run, prompt, answer, verdict){
+export function applyRound(run, prompt, answer, verdict, spentMs){
   const r = {...run, answered: [...(run.answered || []), prompt], log: [...(run.log || [])], rounds: (run.rounds || 0) + 1};
-  const out = {pts:0, bonus:0, repaired:false};
+  const out = {pts:0, bonus:0, refuel:0};
+  const fuelMode = r.mode !== "daily";
+  if (fuelMode){
+    let fuel = Number(r.lives) || 0; if (fuel < 1000 && (run.rounds || 0) === 0) fuel = FUEL_START;
+    fuel -= Math.max(0, Math.min(120000, Number(spentMs) || 0));
+    // A little grace for network lag; past that the tank was empty and the answer came too late.
+    if (verdict.status === "valid" && fuel <= -3000) verdict = {status:"invalid", timeout:true};
+    r.lives = Math.round(fuel);
+  }
   if (verdict.status === "valid"){
-    const s = verdict.score;
+    const s = verdict.score, tier = bandOf(s);
     r.combo = s >= 56 ? (r.combo || 0) + 1 : 0;
     out.bonus = r.combo >= 2 ? Math.min(30, (r.combo - 1)*10) : 0;
-    out.pts = s + out.bonus;
+    out.pts = TIER_PTS[tier - 1] + out.bonus;
     r.max_combo = Math.max(r.max_combo || 0, r.combo);
     r.clean = (r.clean || 0) + 1;
-    if (s >= 91 && r.lives < LIVES && r.mode !== "daily"){ r.lives += 1; out.repaired = true; }
+    if (fuelMode){ out.refuel = REFUEL[tier - 1]; r.lives = Math.min(FUEL_TANK, Math.max(0, r.lives) + out.refuel); }
     r.score = (r.score || 0) + out.pts;
     r.best_pick = Math.max(r.best_pick || 0, s);
     if (s >= 91) r.jackpots = (r.jackpots || 0) + 1;
     r.log.push({prompt, answer, valid:true, score:s, pts:out.pts});
   } else {
     r.combo = 0; r.clean = 0;
-    if (r.mode !== "daily") r.lives -= 1;
+    if (fuelMode) r.lives = 0;
     r.log.push({prompt, answer, valid:false, score:0, pts:0});
   }
-  return {run: r, state: {score: r.score, lives: r.lives, combo: r.combo, bonus: out.bonus, pts: out.pts, repaired: out.repaired, rounds: r.rounds, over: runOver(r)}};
+  if (r.rounds >= 200) r.lives = Math.min(r.lives, 0);
+  return {run: r, state: {score: r.score, fuel: fuelMode ? r.lives : null, lives: r.lives, combo: r.combo, bonus: out.bonus, pts: out.pts, refuel: out.refuel, rounds: r.rounds, over: runOver(r)}};
 }
 
 export async function runsToday(playerId){
