@@ -1,10 +1,28 @@
 // GET /api/health -> plain-language check of the setup. Open it in a browser after deploying.
-import { store, MOCK, today, judge } from "./_lib.js";
+import { store, MOCK, today, judge, genPrompts, pickThemes } from "./_lib.js";
 
 export default async function handler(req, res){
   const env = process.env;
   // Test the judge: /api/health?prompt=Name%20a%20cheese&answer=Muenster
   const q = req.query || Object.fromEntries(new URL(req.url, "http://x").searchParams);
+  // Speed check: /api/health?timing=1 times each step the judge does.
+  if (q.timing){
+    const t = {}, lap = async (k, fn) => { const s = Date.now(); try { await fn(); t[k] = Date.now() - s; } catch (e){ t[k] = "error " + (e.message || e.code); } };
+    await lap("db_read_1", () => store.getRun("00000000-0000-0000-0000-000000000000"));
+    await lap("db_read_2", () => store.getRun("00000000-0000-0000-0000-000000000000"));
+    await lap("db_counter", () => store.bump("health"));
+    await lap("judge_cached", () => judge("Name a cheese", "Muenster", null, true));
+    await lap("judge_ai_new", () => judge("Name a cheese", "Cheese " + Math.random().toString(36).slice(2,6), null, true));
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json({region: process.env.VERCEL_REGION || "unknown", ms: t});
+  }
+  // Prompt check: /api/health?gen=1 shows a fresh batch from the AI prompt writer.
+  if (q.gen){
+    const t = Date.now(); let out;
+    try { out = await genPrompts(pickThemes(5), []); } catch (e){ out = {error: e.code || e.message, detail: e.message}; }
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(200).json({ms: Date.now() - t, prompts: out});
+  }
   if (q.prompt && q.answer){
     const t = Date.now();
     let verdict; try { verdict = await judge(String(q.prompt).slice(0,160), String(q.answer).slice(0,60), null, true); } catch (e){ verdict = {status:"crash", error: e.message}; }

@@ -1,5 +1,5 @@
 // POST {playerId, token, runId, avoid[]} -> {prompts:[{prompt, category}], offline}
-// Fresh prompts for an Unlimited flight: a mix of new AI prompts and the built-in bank,
+// Fresh prompts for an Unlimited flight, written by the AI on the spot (the built-in bank is only a backup),
 // never one this pilot has seen before (or a close rewording of one).
 import { route, auth, store, genPrompts, pickThemes, offlinePrompts, similarPrompt, promptCore, shuffle, HttpError } from "./_lib.js";
 import { BANK } from "./_bank.js";
@@ -13,13 +13,12 @@ export default route(["POST"], async ({req, body}) => {
   const fresh = x => { const c = promptCore(x.prompt); if (past.some(o => similarPrompt(o, c))) return false; past.push(c); return true; };
   const keep = (list, max = Infinity) => { const out = []; for (const x of list){ if (out.length >= max) break; if (fresh(x)) out.push(x); } return out; };
 
-  // Ask the AI and pull from the bank at the same time.
-  let ai = [];
-  try { ai = keep(await genPrompts(pickThemes(8), avoid.slice(-120))); } catch {}
-  const bank = keep(shuffle(BANK.map(([prompt, category]) => ({prompt, category}))), 8);
-  // Half and half when both are available, so every flight feels different.
-  let prompts = shuffle([...ai.slice(0, bank.length ? 4 : 8), ...bank.slice(0, ai.length ? 4 : 8)]);
-  let offline = !ai.length;
+  // The AI writes every prompt on the spot. Two calls run at once with different themes for more variety.
+  const calls = await Promise.allSettled([genPrompts(pickThemes(5), avoid.slice(-150)), genPrompts(pickThemes(5), avoid.slice(-150))]);
+  let prompts = keep(shuffle(calls.flatMap(c => c.status === "fulfilled" ? c.value : [])), 8);
+  let offline = !prompts.length;
+  // Only if the AI is down or came up short does the built-in bank fill the gap.
+  if (prompts.length < 4) prompts.push(...keep(shuffle(BANK.map(([prompt, category]) => ({prompt, category}))), 8 - prompts.length));
   if (prompts.length < 3) prompts.push(...keep(offlinePrompts(6, [...avoid, ...prompts.map(x => x.prompt)])));
   if (!prompts.length){ prompts = shuffle(BANK.map(([prompt, category]) => ({prompt, category}))).slice(0, 6); offline = true; }
   await store.updateRun(run.id, {issued: [...(run.issued || []), ...prompts.map(x => x.prompt)].slice(-400)});

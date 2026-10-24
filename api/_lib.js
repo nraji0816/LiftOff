@@ -315,18 +315,23 @@ export function seededOffline(day){
   const pool = BOOK.slice(); for (let i=pool.length-1;i>0;i--){ const j = Math.floor(rnd()*(i+1)); [pool[i],pool[j]] = [pool[j],pool[i]]; }
   return pool.slice(0, DAILY_N).map(b => ({prompt: b[0], category: b[1]}));
 }
+// Random angles that push the AI off the obvious prompt for a theme, so no two flights look alike.
+const ANGLES = ["from the 2000s","from the 90s","from the 2010s","trending right now","kids love","your parents love","people argue about","that is overrated","people pretend to like","you'd see on TikTok","you'd find at a gas station","you'd see at a theme park","you'd bring on a road trip","you'd see in a horror movie","at a sleepover","at a wedding","at a tailgate","in a dorm","in a celebrity's house","that's green","that's tiny","that's loud","that's sticky","that's expensive","that's cheap","with a weird name","that comes in a can","that's shaped like a ball","you'd regret buying","that's a guilty pleasure","everyone owned once","that makes a sound","that smells good","that smells bad","you'd see in Las Vegas","from a famous ad","on a mall's food court","you'd find in a teenager's room","at a family reunion","on a first date","in a music video","on a vision board","that went viral","that's a childhood memory","that's iconic in LA","that's iconic in New York","in the South","at a festival","at the gym","at 3 a.m."];
 export async function genPrompts(themes, avoid){
-  const list = themes.map((t,i) => `${i+1}. ${t.label} (${t.hint})`).join("\n");
-  const q = `You write prompts for a category game. Players type ONE answer to a prompt like "Name a pizza topping". Valid answers score more the less common they are.
-Write exactly one prompt for each theme below, in this order. Each prompt must clearly belong to its own theme.
+  const list = themes.map((t,i) => `${i+1}. ${t.label} (${t.hint})` + (Math.random() < .6 ? `, optional angle: "${ANGLES[Math.floor(Math.random()*ANGLES.length)]}"` : "")).join("\n");
+  const q = `You write prompts for a fun category game. Players type ONE answer to a prompt like "Name a pizza topping". Valid answers score more the less common they are.
+Write exactly one prompt for each theme below, in this order. Each prompt must clearly belong to its own theme. Be creative and surprising: the player should feel they have never seen this prompt before. Use the optional angle when it makes a fun, playable prompt; skip it if it would be awkward.
 ${list}
 ${PROMPT_STYLE}
-Pick a fresh, specific angle within each theme, not the first obvious prompt. Do not reuse or closely reword any of these: ${(avoid || []).slice(-120).join(" | ") || "none"}. Random seed: ${Math.random().toString(36).slice(2,8)}.
+Never reuse or closely reword any of these: ${(avoid || []).slice(-150).join(" | ") || "none"}. Random seed: ${Math.random().toString(36).slice(2,10)}.
 Reply with only a JSON array of ${themes.length} prompt strings, in the same order.`;
-  const arr = await askClaude(q, 900);
+  const text = await askClaude(q, 1000, 15000, true);
+  let arr = null; try { arr = parseJSON(text); } catch {}
+  // If the reply isn't clean JSON, pull the prompts out of it anyway.
+  if (!Array.isArray(arr)) arr = [...String(text).matchAll(/"(Name [^"]{4,110})"/g)].map(m => m[1]);
   const out = [];
-  if (Array.isArray(arr)) arr.forEach((x,i) => { const p = typeof x === "string" ? x : x && x.prompt; if (typeof p === "string" && p.length < 120 && themes[i]) out.push({prompt: p.trim(), category: themes[i].label}); });
-  if (!out.length) throw new HttpError(502, "bad_ai_reply");
+  arr.forEach((x,i) => { const p = typeof x === "string" ? x : x && x.prompt; if (typeof p === "string" && /^Name /i.test(p.trim()) && p.length < 120) out.push({prompt: p.trim(), category: (themes[i] || themes[0]).label}); });
+  if (!out.length) throw new HttpError(502, "bad_ai_reply", text.slice(0, 160));
   return out;
 }
 
