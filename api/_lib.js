@@ -177,7 +177,7 @@ export function parseJSON(text){
   if (a >= 0 && b > a){ try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
   throw new HttpError(502, "bad_ai_reply");
 }
-export async function askClaude(prompt, maxTokens = 1500, timeoutMs = 25000){
+export async function askClaude(prompt, maxTokens = 1500, timeoutMs = 25000, raw = false){
   if (!env.ANTHROPIC_API_KEY) throw new HttpError(503, "no_ai");
   const n = await store.bump("ai");
   if (n > MAX_AI_CALLS_PER_DAY) throw new HttpError(503, "ai_budget");
@@ -188,7 +188,18 @@ export async function askClaude(prompt, maxTokens = 1500, timeoutMs = 25000){
   });
   if (!r.ok) throw new HttpError(502, "ai_error", "Claude API error " + r.status);
   const j = await r.json();
-  return parseJSON((j.content || []).map(b => b.text || "").join(""));
+  const text = (j.content || []).map(b => b.text || "").join("");
+  if (raw) return text;
+  return parseJSON(text);
+}
+// Reads the judge's reply even when it isn't clean JSON (cut off, wrapped in text, etc.).
+function readVerdict(text){
+  try { const o = parseJSON(text); if (o && typeof o === "object" && o.status) return o; } catch {}
+  const t = String(text || ""), get = k => { const m = t.match(new RegExp('"' + k + '"\\s*:\\s*"([^"]*)')); return m ? m[1] : ""; };
+  const status = get("status") || ((t.match(/\b(valid|invalid|typo|short)\b/i) || [])[1] || "");
+  if (!status) return null;
+  const sc = t.match(/"score"\s*:\s*(\d+)/);
+  return {status: status.toLowerCase(), canonical: get("canonical"), score: sc ? Number(sc[1]) : 50, note: get("note"), suggestion: get("suggestion")};
 }
 
 // ---------- prompt pools ----------
@@ -280,6 +291,7 @@ export const PROMPT_STYLE = `Style: everyday, party game categories anyone under
 Make each one specific enough that not everything goes: roughly 25 to 80 valid answers, with a clear yes or no for any answer. Good: "Name a cereal with a cartoon mascot", "Name a sport played on ice", "Name something in a junk drawer", "Name a streaming service". Too loose: "Name a food", "Name something red".
 Vary the wording across prompts: mix "Name a …", "Name something you …", "Name a famous …", "Name something people …", and "Name a … that …". Aim for prompts people haven't heard before, not the usual party-game staples.
 Each needs obvious answers most people would say first AND specific, regional, or insider picks that would impress a friend.
+No fact-check qualifiers that need trivia knowledge to judge (who founded it, what it started as, what year, where it was made). Bad: "Name a streetwear brand that started as a skate shop". Good: "Name a streetwear brand".
 Rules: starts with "Name a", "Name an" or "Name something"; no real private people; under 70 characters.`;
 
 export function pickThemes(n){
@@ -329,8 +341,10 @@ export const squash = t => norm(t).replace(/ /g,"");
 // The words that make a prompt what it is, so "Name a classic board game" and "Name a board game" count as the same prompt.
 const FILLER = new Set("name a an the of in on at to for from with you your youd someone something some one any kind type types sort famous popular classic common well known good great best favorite favourite real actual thing things that can could would might people often usually might find found see seen is are be its it this these those other".split(" "));
 const core = p => new Set(norm(p).split(" ").filter(w => w && !FILLER.has(w)).map(w => w.length > 3 ? w.replace(/(ies)$/, "y").replace(/(es|s)$/, "") : w));
+export const promptCore = core;
 export function similarPrompt(a, b){
-  const x = core(a), y = core(b); if (!x.size || !y.size) return squash(a) === squash(b);
+  const x = typeof a === "string" ? core(a) : a, y = typeof b === "string" ? core(b) : b;
+  if (!x.size || !y.size) return typeof a === "string" && typeof b === "string" && squash(a) === squash(b);
   let both = 0; for (const w of x) if (y.has(w)) both++;
   const small = Math.min(x.size, y.size);
   return both / (x.size + y.size - both) >= 0.6 || (both === small && small >= 2);
@@ -405,14 +419,18 @@ Ignore capitalization, punctuation, accents, spacing, and singular vs plural. St
 Pick ONE status:
 - "typo": the player clearly meant one specific real answer and only misspelled it (a few letters wrong, missing, swapped or doubled). Put that same answer, correctly spelled, in "suggestion". Never suggest a different answer.
 - "short": a real answer written as an abbreviation, nickname or cut-off name ("Chevy", "Mickey D's", "Chick fil"). Leave "suggestion" empty. A short answer that is itself the complete real name of something (the movie "Ted", the singer "Cher", the brand "Ford") is not "short"; judge it as written. A general name for a kind of thing is never "short": "Bass", "Trout", "Oak", "Cheddar" and "Sushi" are complete answers, not shortened ones.
-- "valid": a real thing that fits the prompt. Be generous with obscure answers: regional items, foreign items, older or discontinued things, deep cuts, subcultures, internet culture, and anything a knowledgeable fan would accept. You will not know every niche thing; if it is plausibly real and fits, mark it valid and score it high. Reasonable interpretations of the prompt count, and so do funny, situational or "could totally be in there" answers. The test is a fair friend at a party game: if they'd say "yeah, that counts", it's valid. Example: for "Something you'd find in grandma's purse", Dentures, Hard Candy, Kleenex, Lipstick and Coupons are all valid.
+- "valid": a real thing that fits the prompt. Be generous with obscure answers: regional items, foreign items, older or discontinued things, deep cuts, subcultures, internet culture, and anything a knowledgeable fan would accept. You will not know every niche thing; if it is plausibly real and fits, mark it valid and score it high. Judge mostly on the main category. If the prompt adds a narrow detail (like "that started as a skate shop" or "from the 90s"), accept answers that clearly belong to that world even if the detail is debatable or only loosely true. Reasonable interpretations of the prompt count, and so do funny, situational or "could totally be in there" answers. The test is a fair friend at a party game: if they'd say "yeah, that counts", it's valid. Example: for "Something you'd find in grandma's purse", Dentures, Hard Candy, Kleenex, Lipstick and Coupons are all valid.
 - "invalid": only when it clearly fails, and when in doubt choose valid: gibberish, obviously made up, clearly does not fit the prompt, the category name itself, or several answers at once.
 If valid, score it 1 to 100, imagining 100 random American adults answering. Be stingy; most valid answers land under 40:
 said by 30% or more = 1 to 15; 10 to 30% = 16 to 35; 3 to 10% = 36 to 55; 1 to 3% = 56 to 75; under 1% but people would nod = 76 to 90; a deep cut almost nobody would think of yet clearly right = 91 to 100 (rare, about 1 answer in 30). Use any integer.
 "note" says what's wrong or why, in under 8 words, without naming any other valid answer. "canonical" is the answer's proper full name.
 Reply with only compact JSON: {"status":"valid","canonical":"Hot Honey","score":78,"note":"Niche but legit.","suggestion":""}`;
   let r;
-  try { r = await askClaude(q, 150, 9000); }
+  try {
+    const text = await askClaude(q, 400, 9000, true);
+    r = readVerdict(text);
+    if (!r) return {status:"error", why:"bad_reply: " + text.slice(0, 160), note:"The judge is busy."};
+  }
   catch (e){
     // Without the AI (demo mode) built-in prompts fall back to their list. Otherwise never reject just because the AI hiccuped.
     if (book && (MOCK || !env.ANTHROPIC_API_KEY)) return {status:"invalid", note:"Not on the list for this one.", ...extra()};
