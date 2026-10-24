@@ -11,10 +11,12 @@ const MAX_REQUESTS_PER_IP_PER_DAY = Number(env.MAX_REQUESTS_PER_IP_PER_DAY || 15
 const MAX_RUNS_PER_PLAYER_PER_DAY = Number(env.MAX_RUNS_PER_PLAYER_PER_DAY || 60);
 export const LIVES = 3, DAILY_N = 7, SECS = 25;
 // Points per tier (Basic, Common, Solid, Rare, Niche, Ultra), like a depth gauge with fixed steps.
-export const TIER_PTS = [10, 20, 35, 60, 85, 100];
+export const TIER_PTS = [10, 15, 30, 60, 85, 100];
+// Every flight is a 7 prompt dive (Daily and Unlimited alike). The fuel system below is switched off.
+export const FUEL_MODE = false;
 // Unlimited runs on fuel (stored in the run's "lives" column, in milliseconds): it drains while a prompt is up,
 // right answers refuel by tier, and the flight ends when the tank hits zero.
-export const FUEL_START = 45000, FUEL_TANK = 60000, REFUEL = [4000, 6000, 8000, 11000, 14000, 18000];
+export const FUEL_START = 45000, FUEL_TANK = 60000, REFUEL = [4000, 6000, 8000, 11000, 14000, 18000], SKIP_COST = 5000;
 
 export const today = () => new Date().toISOString().slice(0, 10);
 export const yesterday = () => new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -476,13 +478,13 @@ const BAND_MIN = [1,16,36,56,76,91];
 export const bandOf = s => { let i = 0; BAND_MIN.forEach((m,k) => { if (s >= m) i = k; }); return i + 1; };
 const EMO = ["🟧","🟨","🟩","💚","⭐","🌟"], MISS = "🟥";
 export const gridOf = log => log.map(r => r.valid ? EMO[bandOf(r.score)-1] : MISS).join("");
-export const runOver = run => run.mode === "daily" ? run.rounds >= DAILY_N : run.lives <= 0;
+export const runOver = run => (run.mode === "daily" || !FUEL_MODE) ? run.rounds >= DAILY_N : run.lives <= 0;
 
 // Apply one judged round to a run and return the new run fields plus what the page needs to show.
 export function applyRound(run, prompt, answer, verdict, spentMs){
   const r = {...run, answered: [...(run.answered || []), prompt], log: [...(run.log || [])], rounds: (run.rounds || 0) + 1};
   const out = {pts:0, bonus:0, refuel:0};
-  const fuelMode = r.mode !== "daily";
+  const fuelMode = FUEL_MODE && r.mode !== "daily";
   if (fuelMode){
     let fuel = Number(r.lives) || 0; if (fuel < 1000 && (run.rounds || 0) === 0) fuel = FUEL_START;
     fuel -= Math.max(0, Math.min(120000, Number(spentMs) || 0));
@@ -493,7 +495,7 @@ export function applyRound(run, prompt, answer, verdict, spentMs){
   if (verdict.status === "valid"){
     const s = verdict.score, tier = bandOf(s);
     r.combo = s >= 56 ? (r.combo || 0) + 1 : 0;
-    out.bonus = r.combo >= 2 ? Math.min(30, (r.combo - 1)*10) : 0;
+    out.bonus = 0;
     out.pts = TIER_PTS[tier - 1] + out.bonus;
     r.max_combo = Math.max(r.max_combo || 0, r.combo);
     r.clean = (r.clean || 0) + 1;
@@ -504,7 +506,8 @@ export function applyRound(run, prompt, answer, verdict, spentMs){
     r.log.push({prompt, answer, valid:true, score:s, pts:out.pts});
   } else {
     r.combo = 0; r.clean = 0;
-    if (fuelMode) r.lives = 0;
+    // Skipping a prompt you don't know costs a little fuel; running the tank dry ends the flight.
+    if (fuelMode) r.lives = verdict.skipped ? Math.max(0, r.lives - SKIP_COST) : 0;
     r.log.push({prompt, answer, valid:false, score:0, pts:0});
   }
   if (r.rounds >= 200) r.lives = Math.min(r.lives, 0);
