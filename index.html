@@ -586,6 +586,8 @@ const bookScore = (t,i,n) => { const [lo,hi] = BOOK_RANGE[t]; return Math.round(
 const LIVES = 3, SECS = 25;
 // Points per tier, and Unlimited's fuel tank (seconds). Fuel drains while a prompt is up; right answers refuel by tier.
 const TIER_PTS = [10, 15, 30, 60, 85, 100];
+// Same gentle curve as the server: rarer answers land a bit higher.
+const curve = s => Math.max(1, Math.min(100, Math.round(100 * Math.pow(Math.max(1, Math.min(100, Number(s) || 1)) / 100, 0.8))));
 const FUEL_START = 45, FUEL_TANK = 60, REFUEL = [4, 6, 8, 11, 14, 18];
 const WRONG_COST = {daily: 3, endless: 3}, SKIP_COST = 5;
 // Every flight works like a Krillion dive: 7 prompts, 25 seconds each, no lives. The fuel system is switched off.
@@ -1048,7 +1050,7 @@ function judgeOffline(ans){
   const a = squash(ans), book = S.current.book;
   const extra = {common:book[0].slice(0,4).map(titleCase), rare:titleCase(book[3][Math.floor(Math.random()*book[3].length)])};
   for (let t=0;t<4;t++) for (const w of book[t]) if (sameForm(a, squash(w)))
-    return {valid:true, score:bookScore(t, book[t].indexOf(w), book[t].length), canonical:titleCase(w), ...extra};
+    return {valid:true, score:curve(bookScore(t, book[t].indexOf(w), book[t].length)), canonical:titleCase(w), ...extra};
   const sug = closest(a, book.flat(), ans);
   if (sug) return {bounce:true, kind:"typo", suggestion:titleCase(sug)};
   return {bounce:true, kind:"wrong", note:"Not on the list for this one."};
@@ -1058,7 +1060,7 @@ function judgeList(ans, list){
   const a = squash(ans);
   for (const [w, sc] of list) if (sameForm(a, squash(w))){
     const rares = list.filter(x => x[1] >= 80);
-    return {valid:true, score:clamp(Math.round(sc) || 1, 1, 100), canonical:w, note:"",
+    return {valid:true, score:curve(sc), canonical:w, note:"",
             common:list.slice(0,3).map(x => x[0]), rare:(rares.length ? rares[Math.floor(Math.random()*rares.length)] : list[list.length-1])[0]};
   }
   const sug = closest(a, list.map(x => x[0]), ans);
@@ -1248,7 +1250,7 @@ function finish(ans, v){
   S.log.unshift({n:S.round, prompt:S.current.prompt, v});
   S.verdict = v; S.phase = "result"; S.bounce = null; S.revealed = false;
   renderAll();
-  const token = S.log.length, hold = v.valid ? (reduceMotion ? 1400 : FX.dur*1000 + 1400) : v.error ? 1200 : 2000;
+  const token = S.log.length, hold = v.valid ? (reduceMotion ? 1100 : FX.dur*1000 + 900) : v.error ? 1000 : 1500;
   setTimeout(() => {
     if (S.page !== "play" || S.phase !== "result" || S.log.length !== token) return;
     S.revealed = true; renderAll();
@@ -1488,7 +1490,7 @@ const FX = {
   reset(){ this.travel = 0; this.lift = 0; this.rings = []; this.wisps = []; this.alt = this.from = this.to = 0; this.dur = 0; this.burnEnd = 0; this.misfire = 0; this.lastZone = 0; P.length = 0; this.pending = []; },
   scored(score, band, total){
     const now = performance.now();
-    const dur = reduceMotion ? .5 : 1.6 + 2.4*Math.min(1, score/100);
+    const dur = reduceMotion ? .5 : 1.15 + 1.75*Math.min(1, score/100);
     this.from = this.alt; this.to = total; this.t0 = now; this.dur = dur;
     this.band = band; this.power = Math.min(1, .25 + .75*score/100);
     this.burnStart = now; this.burnEnd = now + dur*1000;
@@ -2104,7 +2106,7 @@ function playTransit(round){
     if (!fuelRun()){ eng.replaceChildren(el("span",{class:"lnum",text:`Round ${round} of ${DAILY_N}`})); eng.setAttribute("aria-label", `Round ${round} of ${DAILY_N}`); }
     $("trCount").textContent = "";
     ov.hidden = false; requestAnimationFrame(() => ov.classList.add("show"));
-    const GO = reduceMotion ? 1.0 : 1.95, END = reduceMotion ? 1.5 : 3.15, beat = GO/3;
+    const GO = reduceMotion ? 1.0 : 1.5, END = reduceMotion ? 1.5 : 2.45, beat = GO/3;
     const parts = [];
     let done = false, t0 = performance.now(), last = t0, shown = "";
     const onKey = e => { if (e.key === "Enter" || e.key === " " || e.key === "Escape"){ e.preventDefault(); finish(); } };
