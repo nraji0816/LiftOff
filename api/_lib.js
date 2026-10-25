@@ -12,6 +12,8 @@ const MAX_RUNS_PER_PLAYER_PER_DAY = Number(env.MAX_RUNS_PER_PLAYER_PER_DAY || 60
 export const LIVES = 3, DAILY_N = 7, SECS = 25;
 // Points per tier (Basic, Common, Solid, Rare, Niche, Ultra), like a depth gauge with fixed steps.
 export const TIER_PTS = [10, 15, 30, 60, 85, 100];
+// A gentle curve on rarity scores so Rare and Niche are a bit easier to reach (60 -> 66, 70 -> 75, 85 -> 88). The page uses the same curve.
+export const curve = s => Math.max(1, Math.min(100, Math.round(100 * Math.pow(Math.max(1, Math.min(100, Number(s) || 1)) / 100, 0.8))));
 // Every flight is a 7 prompt dive (Daily and Unlimited alike). The fuel system below is switched off.
 export const FUEL_MODE = false;
 // Unlimited runs on fuel (stored in the run's "lives" column, in milliseconds): it drains while a prompt is up,
@@ -431,7 +433,7 @@ export async function judge(prompt, answer, listPromise, force){
     force ? null : store.getList(rejectKey(prompt)).catch(() => null)
   ]);
   const extra = () => list && list.length ? {common: list.slice(0,3).map(x => x[0]), rare: (list.filter(x => x[1] >= 80)[0] || list[list.length-1])[0]} : {common:[], rare:""};
-  if (list) for (const [w, sc] of list) if (sameForm(a, squash(w))) return {status:"valid", score: sc, canonical: w, note:"", ...extra()};
+  if (list) for (const [w, sc] of list) if (sameForm(a, squash(w))) return {status:"valid", score: curve(sc), canonical: w, note:"", ...extra()};
   // force = the player fired the same answer again after a spelling check, so let the judge decide.
   if (list && !force){ const sug = closest(a, list.map(x => x[0]), answer); if (sug) return {status:"bounce", kind:"typo", suggestion: sug}; }
   if (rejected) for (const [w, why] of rejected) if (sameForm(a, squash(w))) return {status:"invalid", note: why || "Not accepted.", ...extra()};
@@ -476,7 +478,7 @@ Reply with only compact JSON: {"status":"valid","canonical":"Hot Honey","score":
     const score = Math.max(1, Math.min(100, Math.round(Number(r.score) || 1))), canonical = String(r.canonical || answer).slice(0,60);
     // Remember accepted answers so the next player who says it is scored instantly.
     if (list){ list.push([canonical, score]); await store.putList(listKey(prompt), prompt, list).catch(() => {}); }
-    return {status:"valid", score, canonical, note, ...ex};
+    return {status:"valid", score: curve(score), canonical, note, ...ex};
   }
   if (st2 === "invalid" && r.suggestion && isTypoOf(String(r.suggestion).slice(0,40), answer)) return {status:"bounce", kind:"typo", suggestion: String(r.suggestion).slice(0,40)};
   if (st2 === "invalid"){
