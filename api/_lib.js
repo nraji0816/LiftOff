@@ -12,8 +12,8 @@ const MAX_RUNS_PER_PLAYER_PER_DAY = Number(env.MAX_RUNS_PER_PLAYER_PER_DAY || 60
 export const LIVES = 3, DAILY_N = 7, SECS = 25;
 // Points per tier (Basic, Common, Solid, Rare, Niche, Ultra), like a depth gauge with fixed steps.
 export const TIER_PTS = [10, 15, 30, 60, 85, 100];
-// A gentle curve on rarity scores so Rare and Niche are a bit easier to reach (60 -> 66, 70 -> 75, 85 -> 88). The page uses the same curve.
-export const curve = s => Math.max(1, Math.min(100, Math.round(100 * Math.pow(Math.max(1, Math.min(100, Number(s) || 1)) / 100, 0.8))));
+// A curve on rarity scores so Rare, Niche and Ultra are reachable (40 -> 55, 60 -> 72, 70 -> 79, 86 -> 91). The page uses the same curve.
+export const curve = s => Math.max(1, Math.min(100, Math.round(100 * Math.pow(Math.max(1, Math.min(100, Number(s) || 1)) / 100, 0.65))));
 // Every flight is a 7 prompt dive (Daily and Unlimited alike). The fuel system below is switched off.
 export const FUEL_MODE = false;
 // Unlimited runs on fuel (stored in the run's "lives" column, in milliseconds): it drains while a prompt is up,
@@ -448,8 +448,8 @@ Pick ONE status:
 - "short": a real answer written as an abbreviation, nickname or cut-off name ("Chevy", "Mickey D's", "Chick fil"). Leave "suggestion" empty. A short answer that is itself the complete real name of something (the movie "Ted", the singer "Cher", the brand "Ford") is not "short"; judge it as written. A general name for a kind of thing is never "short": "Bass", "Trout", "Oak", "Cheddar" and "Sushi" are complete answers, not shortened ones.
 - "valid": a real, specific thing that clearly belongs in the category. Real obscure answers count: regional, foreign, older or discontinued things, deep cuts and fan knowledge. You will not know every niche thing; if it is a real, specific member of the category, accept it. If a fan of the topic would recognize it as one, accept it even if you are not certain, with a modest score. Judge mostly on the main category; if the prompt adds a narrow detail, the answer must at least plausibly match it.
 - "invalid": anything that does not clearly fit: a loose association instead of a member of the category ("Sand" for "Name a beach town"), a joke, a vague or generic answer ("Food", "Stuff", "A song"), the category itself, something you have no reason to believe exists, gibberish, or several answers at once. "It could kind of count" is not enough; a fair but strict friend has to say "yes, that is one."
-If valid, score it 1 to 100 by how rare it truly is, imagining 100 random American adults answering. Be stingy; most valid answers land under 40, and an answer you are unsure about scores no higher than 70:
-said by 30% or more = 1 to 15; 10 to 30% = 16 to 35; 3 to 10% = 36 to 55; 1 to 3% = 56 to 75; under 1% but people would nod = 76 to 90; a deep cut almost nobody would think of yet clearly right = 91 to 100 (rare, about 1 answer in 30). Use any integer.
+If valid, score it 1 to 100 by how rare it truly is, imagining 100 random American adults answering. Reward real effort: a genuinely uncommon pick deserves a high score, and an answer you are unsure about scores no higher than 75:
+said by 30% or more = 1 to 15; 10 to 30% = 16 to 35; 3 to 10% = 36 to 55; 1 to 3% = 56 to 75; under 1% but people would nod = 76 to 90; a deep cut almost nobody would think of yet clearly right = 91 to 100 (about 1 answer in 12). Use any integer.
 "note" says what's wrong or why, in under 8 words, without naming any other valid answer. "canonical" is the answer's proper full name.
 Reply with only compact JSON: {"status":"valid","canonical":"Hot Honey","score":78,"note":"Niche but legit.","suggestion":""}. For "invalid", still put the closest real answer in "suggestion" if the player was probably trying to type one.`;
   let r;
