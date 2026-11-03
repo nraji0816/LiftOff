@@ -257,35 +257,23 @@ export const THEMES = [
   {label:"Music", hint:"instruments, genres, famous bands, song types"},
   {label:"Celebrities", hint:"famous people known by one name, famous duos, icons"},
   {label:"Around the house", hint:"household items, rooms, furniture, chores"},
-  {label:"Garage & tools", hint:"tools, hardware, car care, DIY projects"},
-  {label:"Bathroom", hint:"toiletries, bathroom items, grooming products"},
   {label:"Brands", hint:"logos, products, famous companies"},
   {label:"Stores", hint:"retail chains, malls, department stores, shopping"},
   {label:"Places", hint:"cities, states, countries, landmarks"},
   {label:"Travel", hint:"airports, packing, vacation spots, hotels, road trips"},
   {label:"Cars", hint:"car brands, models, car parts, things in a car"},
-  {label:"Jobs", hint:"careers, workplaces, uniforms, tools of a trade"},
-  {label:"Office", hint:"office supplies, meetings, workplace things"},
-  {label:"Money", hint:"ways to pay, things people save for, banks, bills"},
   {label:"Clothes", hint:"clothing, shoes, accessories, materials"},
   {label:"Beauty", hint:"makeup, hair products, salon services, nails"},
-  {label:"Health", hint:"first aid kit items, doctor visit things, vitamins"},
   {label:"Games", hint:"board games, card games, video games, arcade games"},
   {label:"Toys", hint:"classic toys, playground equipment, kids' games"},
   {label:"Hobbies", hint:"crafts, collecting, gardening, things people do for fun"},
   {label:"Holidays", hint:"holidays, decorations, traditions, holiday foods"},
   {label:"Parties", hint:"birthday party things, wedding things, party foods"},
   {label:"Tech", hint:"gadgets, websites, computer parts, phone features"},
-  {label:"Science", hint:"everyday science like planets, weather terms, body parts, lab gear"},
-  {label:"History", hint:"famous inventions, presidents, historic events everyone knows"},
   {label:"School", hint:"school supplies, subjects, things in a classroom"},
   {label:"City life", hint:"things on a street, public transit, buildings, city sounds"},
   {label:"Family", hint:"family traditions, relatives, things at grandma's house"},
-  {label:"Colors & shapes", hint:"shades of colors, shapes, patterns"},
-  {label:"Words", hint:"compound words, words that rhyme, things that start with a letter"},
-  {label:"Pop culture", hint:"viral moments, famous celebrity couples, award shows, iconic outfits", pop:true},
-  {label:"Trends", hint:"viral trends, dance crazes, fads, things that blew up online", pop:true},
-  {label:"Memes", hint:"famous memes, internet phrases, viral videos", pop:true},
+  {label:"Pop culture", hint:"famous celebrity couples, award shows, iconic characters, famous celebrities", pop:true},
   {label:"Pop stars", hint:"pop singers, hit songs, tours, fan bases", pop:true},
   {label:"Hip-hop", hint:"rappers, rap songs, producers, hip-hop slang", pop:true},
   {label:"Sneakers & streetwear", hint:"sneaker models, streetwear brands, hype drops", pop:true},
@@ -299,7 +287,38 @@ export const THEMES = [
   {label:"Sports stars", hint:"famous athletes, sports legends, jersey numbers, celebrations", pop:true},
   {label:"Supercars", hint:"exotic cars, luxury car brands, famous movie cars", pop:true},
   {label:"Gadgets", hint:"hot tech products, apps everyone uses, smart devices", pop:true},
-  {label:"Creators", hint:"YouTubers, streamers, podcasts, influencer formats", pop:true}
+  {label:"Creators", hint:"YouTubers, streamers, podcasts, influencer formats", pop:true},
+  // More topics aimed at people in their 20s and 30s: things they grew up with, watch, play, eat and argue about.
+  {label:"2000s nostalgia", hint:"2000s toys, shows, gadgets, snacks, pop stars, movies kids grew up with", pop:true},
+  {label:"90s kids", hint:"90s cartoons, toys, snacks, boy bands, movies millennials grew up on", pop:true},
+  {label:"Disney Channel & Nickelodeon", hint:"shows, stars, original movies, iconic characters", pop:true},
+  {label:"Netflix & binge shows", hint:"hit series, characters, docuseries, shows everyone watched", pop:true},
+  {label:"Sitcoms", hint:"sitcoms, sitcom characters, famous TV friend groups", pop:true},
+  {label:"Animated movies", hint:"Pixar, DreamWorks, Disney, Illumination movies and characters", pop:true},
+  {label:"Rom-coms & teen movies", hint:"romantic comedies, high school movies, coming of age films", pop:true},
+  {label:"Horror", hint:"horror movies, slasher villains, scary franchises", pop:true},
+  {label:"Rappers", hint:"rappers, hip-hop albums, rap groups, producers", pop:true},
+  {label:"Pop hits", hint:"pop songs, pop stars, albums, girl groups, boy bands", pop:true},
+  {label:"Festivals & concerts", hint:"music festivals, DJs, headliners, touring artists", pop:true},
+  {label:"Nintendo", hint:"Nintendo games, Mario and Zelda characters, consoles", pop:true},
+  {label:"Pokemon", hint:"Pokemon species, trainers, games, types", pop:true},
+  {label:"Mobile & online games", hint:"phone games, Roblox games, online multiplayer games", pop:true},
+  {label:"NBA", hint:"NBA teams, players, legends, arenas", pop:true},
+  {label:"NFL", hint:"NFL teams, quarterbacks, players, Super Bowl things", pop:true},
+  {label:"Soccer", hint:"soccer clubs, players, leagues, World Cup things", pop:true},
+  {label:"Athletes", hint:"famous athletes across every sport, Olympians, UFC fighters", pop:true},
+  {label:"Late night food", hint:"late night snacks, drive-thru orders, pizza toppings, wings flavors", pop:true},
+  {label:"Coffee & boba", hint:"coffee drinks, Starbucks orders, boba flavors, coffee chains", pop:true},
+  {label:"Snacks & candy", hint:"chips, candy bars, gummies, cereal brands, snack brands", pop:true},
+  {label:"Restaurant chains", hint:"sit-down chains, fast casual spots, chain menu items", pop:true},
+  {label:"Apps", hint:"apps on your phone, social apps, streaming apps, dating apps", pop:true},
+  {label:"Brands you wear", hint:"sneaker brands, clothing brands, athleisure, luxury labels", pop:true},
+  {label:"Famous duos & groups", hint:"bands, comedy duos, famous friend groups, TV couples", pop:true},
+  {label:"Superhero universes", hint:"Marvel and DC heroes, villains, teams, actors who played them", pop:true},
+  {label:"Fantasy worlds", hint:"Harry Potter, Star Wars, Lord of the Rings, Game of Thrones characters and places", pop:true},
+  {label:"Road trips & cities", hint:"famous US cities, vacation spots, theme parks, national parks", pop:false},
+  {label:"Party games", hint:"board games, card games, drinking games, party games", pop:true},
+  {label:"Cars people want", hint:"car brands, sports cars, dream cars, famous movie cars", pop:true}
 ];
 
 export const PROMPT_STYLE = `Style: clean, clear-cut categories with a big pool of real answers that anyone understands instantly, like "Name a Pixar movie", "Name an NBA team", "Name a Pokemon", "Name a cereal brand", "Name a Taylor Swift song", "Name a country in Africa", "Name a dog breed", "Name a candy bar".
@@ -307,11 +326,13 @@ Every prompt must have an objective yes or no for any answer: a list you could l
 Every answer must be a named thing with a standard name people agree on: a title, brand, person, character, species, place, team, product, dish. Never use categories whose members have no standard name: memes, trends, viral moments, quotes, movie lines, scenes, slang, catchphrases, jokes, outfits, aesthetics.
 Aim for 40 to 300 real answers: obvious ones most people say first, and a long tail of deep cuts that would impress a fan.
 Not academic or nerdy trivia: no chemical elements, moons, bones, dates, capitals, or textbook lists. No fact-check qualifiers that need trivia to judge (who founded it, what it started as, what year it came out).
+Fun test: it must be something a group of friends would enjoy, and an average American in their 20s could name at least 5 answers without thinking. Big pop culture, food, sports, music, movies, TV, games, brands people use, animals. Never boring or specialist topics: banks, finance, insurance, companies people don't use, government, politics, academic subjects, obscure countries or cities, foreign versions of everyday things ("a bank from Japan", "a city in Poland").
 Rules: starts with "Name a", "Name an" or "Name something"; no real private people; under 60 characters.`;
 
 export function pickThemes(n){
   const pop = shuffle(THEMES.filter(t => t.pop)), gen = shuffle(THEMES.filter(t => !t.pop));
-  const k = Math.min(pop.length, n >= 7 ? 2 + (Math.random() < .5 ? 1 : 0) : 2);
+  // Mostly pop culture and things people in their 20s and 30s love, with some everyday topics mixed in.
+  const k = Math.min(pop.length, Math.round(n * (.6 + Math.random() * .15)));
   return shuffle([...pop.slice(0, k), ...gen.slice(0, n - k)]);
 }
 const BOOK_RANGE = [[4,15],[18,40],[45,72],[78,98]];
@@ -331,7 +352,7 @@ export function seededOffline(day){
   return pool.slice(0, DAILY_N).map(b => ({prompt: b[0], category: b[1]}));
 }
 // Random angles that push the AI off the obvious prompt for a theme, so no two flights look alike.
-const ANGLES = ["from the 2000s","from the 90s","from the 2010s","from the 80s","from a Disney movie","from a Pixar movie","from a video game","from an anime","from a sitcom","from a Marvel movie","from a cartoon","from Japan","from Italy","from Mexico","from the UK","from Korea","from France","from California","from Texas","from New York","from Florida","from the South","sold at Costco","sold at Target","on a McDonald's menu","with a cartoon mascot","with a number in the name","with an animal in the name","with a color in the name","that won a Grammy","that won an Oscar","in the Olympics","on a Monopoly board","in the Hall of Fame","that is a one-word name","that has a sequel","that is a franchise"];
+const ANGLES = ["from the 2000s","from the 90s","from the 2010s","from the 80s","from a Disney movie","from a Pixar movie","from a video game","from an anime","from a sitcom","from a Marvel movie","from a cartoon","sold at Costco","sold at Target","on a McDonald's menu","with a cartoon mascot","with a number in the name","with an animal in the name","with a color in the name","that won a Grammy","that won an Oscar","in the Olympics","on a Monopoly board","that is a one-word name","that has a sequel","that is a franchise"];
 export async function genPrompts(themes, avoid){
   const list = themes.map((t,i) => `${i+1}. ${t.label} (${t.hint})` + (Math.random() < .6 ? `, optional scope: "${ANGLES[Math.floor(Math.random()*ANGLES.length)]}"` : "")).join("\n");
   const q = `You write prompts for a fun category game. Players type ONE answer to a prompt like "Name a pizza topping". Valid answers score more the less common they are.
