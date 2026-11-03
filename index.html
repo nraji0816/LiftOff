@@ -438,6 +438,15 @@ form.answer .skip:hover{border-color:var(--gold);color:var(--gold)}
 .recap-dots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.25)}
 .recap-dots i.on{background:var(--cyan)}
 @media (prefers-reduced-motion:reduce){.recap-card,.recap-meter b{animation:none}}
+.diffs{display:flex;flex-direction:column;gap:10px}
+.diff{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 12px;background:#05071a;border:2px solid #39407a;color:#fff;cursor:pointer;font:inherit}
+.diff b{font-family:"Press Start 2P",monospace;font-size:13px;font-weight:400}
+.diff span{font-size:13px;opacity:.8}
+.diff.hard b{color:#FF6B6B}.diff.med b{color:#FFD166}.diff.easy b{color:#7CFC7C}
+.diff:hover,.diff:focus-visible{border-color:#7f8cff;outline:none}
+.diff.last{border-color:var(--cyan)}
+.egg{font-size:11px;opacity:.55;font-style:italic;margin-top:4px}
+.egg:hover{opacity:1}
 /* phones */
 @media (max-width:520px){
   body{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
@@ -475,6 +484,7 @@ form.answer .skip:hover{border-color:var(--gold);color:var(--gold)}
 <body>
 <canvas id="space" aria-hidden="true"></canvas>
 <div class="flash" id="flash" aria-hidden="true"></div>
+<div class="gate" id="diffGate" hidden role="dialog" aria-label="Pick a difficulty"><form id="diffForm" onsubmit="return false"><h2>PICK YOUR DIFFICULTY</h2><p>Same 7 prompt flight, different clock.</p><div class="diffs" id="diffList"></div><button type="button" class="btn ghost" id="diffCancel">BACK</button></form></div>
 <div class="gate" id="nameGate" hidden><form id="gateForm" autocomplete="off"><h2>WHAT'S YOUR PILOT NAME?</h2><p>This is how you show up on the leaderboard. You can change it later.</p><input id="gateInput" maxlength="20" placeholder="Pilot name" aria-label="Pilot name"><div class="err" id="gateErr"></div><button class="btn" type="submit" id="gateBtn">CONTINUE</button></form></div>
 <div class="banner" id="banner" role="status" hidden><b id="bnTitle"></b><span id="bnSub"></span></div>
 <div class="recap" id="recap" hidden role="dialog" aria-label="Flight recap">
@@ -584,10 +594,12 @@ const zoneIdx = a => { let z = 0; ZONES.forEach((q,i) => { if (a >= q.a) z = i; 
 const BOOK_RANGE = [[4,15],[18,40],[45,72],[78,98]];
 const bookScore = (t,i,n) => { const [lo,hi] = BOOK_RANGE[t]; return Math.round(lo + (hi-lo) * (n>1 ? i/(n-1) : .5)); };
 const LIVES = 3, SECS = 25;
+// Unlimited difficulty: how long the clock is on each prompt. Daily is always 25 seconds.
+const DIFFS = [{id:"hard", name:"DIFFICULT", secs:25, cls:"hard"}, {id:"medium", name:"MEDIUM", secs:40, cls:"med"}, {id:"easy", name:"EASY", secs:55, cls:"easy"}];
 // Points per tier, and Unlimited's fuel tank (seconds). Fuel drains while a prompt is up; right answers refuel by tier.
 const TIER_PTS = [10, 15, 30, 60, 85, 100];
 // Same gentle curve as the server: rarer answers land a bit higher.
-const curve = s => Math.max(1, Math.min(100, Math.round(100 * Math.pow(Math.max(1, Math.min(100, Number(s) || 1)) / 100, 0.8))));
+const curve = s => Math.max(1, Math.min(100, Math.round(100 * Math.pow(Math.max(1, Math.min(100, Number(s) || 1)) / 100, 0.65))));
 const FUEL_START = 45, FUEL_TANK = 60, REFUEL = [4, 6, 8, 11, 14, 18];
 const WRONG_COST = {daily: 3, endless: 3}, SKIP_COST = 5;
 // Every flight works like a Krillion dive: 7 prompts, 25 seconds each, no lives. The fuel system is switched off.
@@ -878,22 +890,40 @@ function untilTomorrow(){
   return `${Math.floor(m/60)}h ${m%60}m`;
 }
 
-async function launchUnlimited(){
+function launchUnlimited(){
   SFX.unlock(); SFX.click();
   if (!hasName()) return openGate(launchUnlimited);
+  openDiff();
+}
+function openDiff(){
+  const last = ls.get("lo-diff", "medium");
+  $("diffList").replaceChildren(...DIFFS.map(d => el("button",{type:"button",class:"diff " + d.cls + (d.id === last ? " last" : ""),onclick:() => pickDiff(d)},
+    el("b",{text:d.name}), el("span",{text:`(${d.secs} second timer)`}))));
+  $("diffGate").hidden = false;
+  const f = $("diffList").querySelector(".last") || $("diffList").firstChild; if (f) f.focus();
+}
+function pickDiff(d){
+  SFX.click(); ls.set("lo-diff", d.id);
+  $("diffGate").hidden = true;
+  startUnlimited(d);
+}
+$("diffCancel").addEventListener("click", () => { SFX.click(); $("diffGate").hidden = true; });
+async function startUnlimited(diff){
   let runId = null;
   try { await ensurePlayer(); runId = (await api("run-start", {mode:"unlimited"})).runId; }
   catch(e){
     if (e.code === "rate_limited"){ toast(e.message); S.notice = e.message; }
     else { toast("Couldn't reach the server. Your flight won't count toward the leaderboard."); banner("OFFLINE FLIGHT", "Server unreachable. This flight won't count.", "warn"); }
   }
+  S.nextDiff = diff;
   newRun("endless", null, null, runId);
 }
 function newRun(mode, pack, preset, runId){
   SFX.unlock();
   const prevBest = myStats().best || 0;
   Object.assign(S,{page:"play", mode: mode || "endless", pack: pack || null, phase:"transit", score:0, lives:LIVES, round:0, bestPick:0, jackpots:0, used:[], log:[], queue:[], current:null, verdict:null, aiThisRun:aiOK, notice:"",
-    combo:0, maxCombo:0, clean:0, runBadges:[], prevBest, recordHit:false, pauseUntil:0, quitArm:0, runId: runId || null, pendingJudge:null, fuel:FUEL_START, fuelOut:false});
+    combo:0, maxCombo:0, clean:0, runBadges:[], prevBest, recordHit:false, pauseUntil:0, quitArm:0, runId: runId || null, pendingJudge:null, fuel:FUEL_START, fuelOut:false,
+    diff: mode === "daily" ? null : (S.nextDiff || null), secs: mode === "daily" ? SECS : ((S.nextDiff && S.nextDiff.secs) || SECS)});
   S.ranked = !!S.runId; S.aiThisRun = S.ranked;
   if (!S.ranked && !S.notice) S.notice = "Couldn't reach the server, so this flight uses the built-in prompts and won't post to the leaderboard.";
   if (preset){
@@ -992,7 +1022,7 @@ function nextRound(){
   S.current = S.queue.shift();
   S.seen.push(S.current.prompt);
   if (S.mode !== "daily") markSeen(S.current.prompt);
-  S.round++; S.left = fuelRun() ? S.fuel : SECS; S.roundStart = S.left; S.verdict = null; S.phase = "play";
+  S.round++; S.left = fuelRun() ? S.fuel : (S.secs || SECS); S.roundStart = S.left; S.verdict = null; S.phase = "play";
   if (fuelRun() && S.left < 10){ banner("LOW FUEL", Math.ceil(S.left) + " seconds left in the tank", "warn"); SFX.warn(); }
   S.bounce = null; S.bounced = {}; S.prechecks = {}; S.precheckN = 0; S.expired = false; S.pending = ""; S.pauseUntil = 0; S.pauseBudget = 12000;
   prepList(S.current); S.queue.slice(0,2).forEach(prepList);
@@ -2251,7 +2281,7 @@ function paintTimer(){
   paintFuel();
   const t = $("timer"); if (!t) return;
   const paused = S.phase === "judging" || Date.now() < (S.pauseUntil || 0);
-  const full = fuelRun() ? FUEL_TANK : SECS;
+  const full = fuelRun() ? FUEL_TANK : (S.secs || SECS);
   t.firstChild.style.transform = `scaleX(${Math.min(1, S.left/full)})`;
   t.classList.toggle("fuel", fuelRun());
   t.classList.toggle("low", S.left < 6 && !paused);
@@ -2468,7 +2498,7 @@ function lobbyPane(){
   w.append(daily);
   w.append(el("section",{class:"mode-card"},
     el("div",null, el("div",{class:"label",text:"Unlimited flight"}), el("h3",{text:"7 RANDOM PROMPTS · PLAY ANYTIME"}),
-      el("p",{class:"vnote",text:"A fresh flight of 7 brand new prompts every time, same rules as the Daily. Play as many as you want and chase your best score on the board."})),
+      el("p",{class:"vnote",text:"A fresh flight of 7 brand new prompts every time. Pick Difficult, Medium or Easy for a 25, 40 or 55 second clock. Play as many as you want and chase your best score on the board."})),
     el("button",{class:"btn primary",type:"button",text:"LAUNCH UNLIMITED",onclick:launchUnlimited})));
   w.append(el("p",{class:"toast lobby-toast",id:"myToast",text:S.toastMsg || ""}));
   w.append(modeLine());
@@ -2550,9 +2580,11 @@ function howPane(){
       el("li",{text:"Name one real thing in the category. Exact answers only: spelling counts, capitals and plurals don't."}),
       el("li",{text:"Every right answer lands in a tier: Basic 10, Common 15, Solid 30, Rare 60, Niche 85, Ultra 100 points. The fewer people who'd say it, the higher it goes."}),
       el("li",{text:"Points are altitude. 1 point = 10 km. Climb as high as you can."}),
-      el("li",{text:`Every flight is 7 prompts with ${SECS} seconds each. No lives: a prompt you don't know just scores 0, and you move on. Max score is 700.`}),
+      el("li",{text:"Every flight is 7 prompts. No lives: a prompt you don't know just scores 0, and you move on. Max score is 700."}),
       el("li",{text:"A wrong guess costs 3 seconds, but you can keep guessing until time runs out."}),
-      el("li",{text:"Daily Flight: the same 7 prompts for everyone, once a day. Unlimited: 7 brand new random prompts, as often as you like."})),
+      el("li",{text:"Daily Flight: the same 7 prompts for everyone, once a day. Unlimited: 7 brand new random prompts, as often as you like."}),
+      el("li",null, document.createTextNode("Unlimited has three difficulties: Difficult (25 second timer), Medium (40 second timer) and Easy (55 second timer). The Daily is always 25 seconds."),
+        el("div",{class:"egg",text:"Psst: difficulty modes were Ryan Hall's idea. Legend."}))),
     scaleBar(null),
     el("ul",{class:"rules"}, ...BANDS.map((b,i) => el("li",null, el("span",{class:"chip t"+(i+1),text:RANGES[i]}), el("span",null, el("b",{text:b.name + ". "}), document.createTextNode(b.blurb))))),
     el("h3",{class:"sub-title",text:"EXACT ANSWERS"}),
