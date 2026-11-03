@@ -318,7 +318,19 @@ export const THEMES = [
   {label:"Fantasy worlds", hint:"Harry Potter, Star Wars, Lord of the Rings, Game of Thrones characters and places", pop:true},
   {label:"Road trips & cities", hint:"famous US cities, vacation spots, theme parks, national parks", pop:false},
   {label:"Party games", hint:"board games, card games, drinking games, party games", pop:true},
-  {label:"Cars people want", hint:"car brands, sports cars, dream cars, famous movie cars", pop:true}
+  {label:"Cars people want", hint:"car brands, sports cars, dream cars, famous movie cars", pop:true},
+  // Rap, fashion, companies and colleges get extra weight.
+  {label:"Rappers by city", hint:"rappers from Atlanta, New York, LA, Chicago, Houston, Toronto, Detroit, Memphis", pop:true},
+  {label:"Rap albums & songs", hint:"rap albums, rap songs, features, songs by specific rappers", pop:true},
+  {label:"Rap names", hint:"rappers with Lil, Young, MC or a number in their name, rap groups, female rappers", pop:true},
+  {label:"Hip-hop world", hint:"record labels, producers, rappers turned actors, rappers with clothing lines", pop:true},
+  {label:"Luxury fashion", hint:"luxury brands, Italian and French fashion houses, designers, handbag brands", pop:true},
+  {label:"Streetwear", hint:"streetwear brands, sneaker models, skate brands, collabs", pop:true},
+  {label:"Everyday brands", hint:"clothing brands, denim, sportswear, sunglasses, watch brands", pop:true},
+  {label:"Big companies", hint:"famous companies, tech giants, companies with famous logos, companies named after a person", pop:true},
+  {label:"Tech companies", hint:"tech companies, social media companies, video game companies, phone makers", pop:true},
+  {label:"Colleges", hint:"famous universities, Ivy League schools, colleges in a state, college mascots", pop:true},
+  {label:"College sports", hint:"college football powers, March Madness teams, SEC and Big Ten schools", pop:true}
 ];
 
 export const PROMPT_STYLE = `Style: clean, clear-cut categories with a big pool of real answers that anyone understands instantly, like "Name a Pixar movie", "Name an NBA team", "Name a Pokemon", "Name a cereal brand", "Name a Taylor Swift song", "Name a country in Africa", "Name a dog breed", "Name a candy bar".
@@ -326,7 +338,7 @@ Every prompt must have an objective yes or no for any answer: a list you could l
 Every answer must be a named thing with a standard name people agree on: a title, brand, person, character, species, place, team, product, dish. Never use categories whose members have no standard name: memes, trends, viral moments, quotes, movie lines, scenes, slang, catchphrases, jokes, outfits, aesthetics.
 Aim for 40 to 300 real answers: obvious ones most people say first, and a long tail of deep cuts that would impress a fan.
 Not academic or nerdy trivia: no chemical elements, moons, bones, dates, capitals, or textbook lists. No fact-check qualifiers that need trivia to judge (who founded it, what it started as, what year it came out).
-Fun test: it must be something a group of friends would enjoy, and an average American in their 20s could name at least 5 answers without thinking. Big pop culture, food, sports, music, movies, TV, games, brands people use, animals. Never boring or specialist topics: banks, finance, insurance, companies people don't use, government, politics, academic subjects, obscure countries or cities, foreign versions of everyday things ("a bank from Japan", "a city in Poland").
+Fun test: it must be something a group of friends would enjoy, and an average American in their 20s could name at least 5 answers without thinking. Big pop culture, food, sports, music, movies, TV, games, brands people use, animals. Famous companies, brands and colleges people know are great. Never boring or specialist topics: banks, finance, insurance, companies people don't use, government, politics, academic subjects, obscure countries or cities, foreign versions of everyday things ("a bank from Japan", "a city in Poland").
 Rules: starts with "Name a", "Name an" or "Name something"; no real private people; under 60 characters.`;
 
 export function pickThemes(n){

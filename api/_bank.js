@@ -123,10 +123,36 @@ const EXTRA = [
   ...fam("Holidays", "Name a %", ["Christmas decoration","Christmas present","Christmas cookie","Halloween candy","Halloween costume","Halloween decoration","Thanksgiving food","Easter candy","Fourth of July food","Valentine's Day gift","birthday party theme","birthday dessert","wedding song","baby shower game","bachelorette party activity","New Year's Eve tradition","holiday movie","holiday song","holiday drink","party snack"]),
   ...fam("Home", "Name a %", ["kitchen gadget","cleaning product","bathroom item","bedroom item","living room item","piece of furniture","IKEA product","appliance","power tool","hand tool","garden tool","houseplant","smell of a candle","thing in a junk drawer","thing people hoard","thing people forget to clean","thing in a fridge door","thing on a nightstand","thing on a fridge","thing in a garage","thing at a yard sale","DIY project","home style","room in a mansion","thing in a dream house"]),
 ];
+// Rap, fashion, companies and colleges.
+const MORE = [
+  ...fam("Rap", "Name a rapper from %", ["Atlanta","New York","LA","Chicago","Houston","Toronto","Detroit","Memphis","New Orleans","Philadelphia","Compton","Miami","the Bay Area","the UK"]),
+  ["Name a rapper with Lil in their name","Rap"], ["Name a rapper with Young in their name","Rap"], ["Name a rapper with a number in their name","Rap"],
+  ["Name a rapper with MC or DJ in their name","Rap"], ["Name a female rapper","Rap"], ["Name a rap group","Rap"], ["Name a rap duo","Rap"],
+  ["Name a rap album","Rap"], ["Name a hip-hop record label","Rap"], ["Name a hip-hop producer","Rap"], ["Name a rapper who acts in movies","Rap"],
+  ["Name a rapper with a clothing line","Rap"], ["Name a rap song from the 2000s","Rap"], ["Name a rap song from the 2010s","Rap"], ["Name a rapper who died young","Rap"],
+  ["Name a rapper who headlined Coachella","Rap"], ["Name a rapper known by initials","Rap"], ["Name a song with a famous rap feature","Rap"], ["Name a rapper from the 90s","Rap"],
+  ...fam("Rap", "Name a % album", ["Kendrick Lamar","Drake","Kanye West","J. Cole","Travis Scott","Eminem","Jay-Z","Tyler, the Creator","Nicki Minaj","Lil Wayne","Future","Mac Miller"]),
+  ["Name a luxury fashion brand","Fashion"], ["Name an Italian fashion house","Fashion"], ["Name a French fashion house","Fashion"], ["Name a designer handbag brand","Fashion"],
+  ["Name a fashion brand known by its initials","Fashion"], ["Name a designer sneaker","Fashion"], ["Name a streetwear brand","Fashion"], ["Name a denim brand","Fashion"],
+  ["Name a sportswear brand","Fashion"], ["Name a watch brand","Fashion"], ["Name a jewelry brand","Fashion"], ["Name a sunglasses brand","Fashion"],
+  ["Name a fashion designer","Fashion"], ["Name a supermodel","Fashion"], ["Name a brand Supreme collabed with","Fashion"], ["Name a brand with a famous logo on its clothes","Fashion"],
+  ["Name a store in a fancy mall","Fashion"], ["Name a fast fashion brand","Fashion"], ["Name an outdoor clothing brand","Fashion"], ["Name a celebrity fashion brand","Fashion"],
+  ["Name a tech company","Companies"], ["Name a company with an animal logo","Companies"], ["Name a company named after a person","Companies"], ["Name a company with a one-word name","Companies"],
+  ["Name a video game company","Companies"], ["Name a social media company","Companies"], ["Name a phone maker","Companies"], ["Name a soda company","Companies"],
+  ["Name a company with a famous mascot","Companies"], ["Name a famous startup","Companies"], ["Name a company Elon Musk founded or runs","Companies"], ["Name a company famous for its logo","Companies"],
+  ["Name a car company","Companies"], ["Name a company in Silicon Valley","Companies"], ["Name a company that makes headphones","Companies"], ["Name a company that makes laptops","Companies"],
+  ["Name a toy company","Companies"], ["Name a famous billionaire's company","Companies"], ["Name a company with a red logo","Companies"], ["Name a beauty company","Companies"],
+  ["Name an Ivy League school","Colleges"], ["Name a college in California","Colleges"], ["Name a college in New York","Colleges"], ["Name a college in Texas","Colleges"],
+  ["Name a college in Florida","Colleges"], ["Name a college in Boston","Colleges"], ["Name an SEC school","Colleges"], ["Name a Big Ten school","Colleges"],
+  ["Name an ACC school","Colleges"], ["Name an HBCU","Colleges"], ["Name a college mascot","Colleges"], ["Name a college with a famous football team","Colleges"],
+  ["Name a college basketball powerhouse","Colleges"], ["Name a college known for partying","Colleges"], ["Name a college with State in its name","Colleges"], ["Name a famous college in the UK","Colleges"],
+  ["Name a college a president went to","Colleges"], ["Name a college in the Pac-12 or Big 12","Colleges"], ["Name a college with an animal mascot","Colleges"], ["Name a college famous for tech","Colleges"]
+];
 const seenBank = new Set();
 // "a Avengers movie" -> "an Avengers movie", "a NHL team" -> "an NHL team".
 const AN = /^(?:[AEIO]|HBO|HBCU|NHL|NBA|NFL|MLS|MLB|SEC|F1|X-Men|RPG|LA\b|8)/;
 const fixA = p => p.replace(/^Name a (\S+)/, (m, w) => AN.test(w) ? "Name an " + w : m);
 // Only clear-cut list prompts: no situational or opinion ones ("something people do...", "a reason...").
-const CLEAR = ([p, c]) => c !== "Life" && !/^Name (something|a reason|an excuse|a thing)/i.test(p) && !/overrated|regift|forget|lose|meme|trend|slang|phrase|challenge|quote|line\b|moment|aesthetic|abbreviation|emoji|GIF|viral|outfit|term\b|tradition|tattoo|hairstyle|haircut|beard|dance move|power up|excuse/i.test(p);
-export const BANK = [...BASE, ...EXTRA].filter(CLEAR).map(([p, c]) => [fixA(p), c]).filter(([p]) => { const k = p.toLowerCase().replace(/[^a-z0-9]/g, ""); if (seenBank.has(k)) return false; seenBank.add(k); return true; });
+const DULL = /bank|insurance|currency|airport code|language|Eastern Europe|Scandinavia|Middle East|country in (Africa|Asia|South America)|city in (the Midwest|Africa|Asia|South America|Eastern Europe|Scandinavia|the Middle East|India|China|Brazil|Germany|Spain|Canada|Mexico|Japan|Italy|France|the UK|Australia|the South)|password|keyboard|office|national monument|architect|sculptor|poet|scientist|inventor|royal|stylist|reseller|virus|currency|hand tool|power tool|garden tool|cleaning product|appliance|famous river|famous desert|Greek god|painter|famous book|(Persian|Ethiopian|Polish|Russian|Peruvian|Moroccan|Lebanese|Turkish|Filipino|Brazilian|Vietnamese|Jamaican|Cuban|Caribbean|German|British|Spanish|Cajun|hospital|airport|canned) food/i;
+const CLEAR = ([p, c]) => c !== "Life" && !DULL.test(p) && !/^Name (something|a reason|an excuse|a thing)/i.test(p) && !/overrated|regift|forget|lose|meme|trend|slang|phrase|challenge|quote|line\b|moment|aesthetic|abbreviation|emoji|GIF|viral|outfit|term\b|tradition|tattoo|hairstyle|haircut|beard|dance move|power up|excuse/i.test(p);
+export const BANK = [...BASE, ...EXTRA, ...MORE].filter(CLEAR).map(([p, c]) => [fixA(p), c]).filter(([p]) => { const k = p.toLowerCase().replace(/[^a-z0-9]/g, ""); if (seenBank.has(k)) return false; seenBank.add(k); return true; });
